@@ -33,7 +33,7 @@
       "water_inj_jaguar_bbl": 3708365.0,
       "avg_index": 1.374662935171861,
       "index_kwh_per_bbl": 1.3819593719893222,
-      "delta_vs_prev_pct": NaN
+      "delta_vs_prev_pct": null
     },
     "worst_month": {
       "month": "2025-07",

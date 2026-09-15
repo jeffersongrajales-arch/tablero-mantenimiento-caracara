@@ -184,7 +184,7 @@ function renderTables() {
       <td>${fmt1.format(row.index_kwh_per_bbl)}</td>
       <td>${formatEnergy(row.energy_kwh)}</td>
       <td>${formatBbl(row.fluids_bbl)}</td>
-      <td>${row.delta_vs_prev_pct === '' ? '-' : `${fmtPct.format(row.delta_vs_prev_pct)}%`}</td>
+      <td>${row.delta_vs_prev_pct == null || row.delta_vs_prev_pct === '' ? '-' : `${fmtPct.format(row.delta_vs_prev_pct)}%`}</td>
     </tr>
   `).join('');
 
@@ -234,7 +234,7 @@ function render() {
 }
 
 async function init() {
-  const response = await fetch('./data.json');
+  const response = await fetch('./data.json?v=20260915-fix1', { cache: 'no-store' });
   source = await response.json();
   setFilters();
   render();
