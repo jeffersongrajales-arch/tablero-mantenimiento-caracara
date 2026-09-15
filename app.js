@@ -26,6 +26,30 @@ function addFilter(key,target){
 function setDim(key,value){state.dims[key]=new Set([value]);controls[key].sync();refresh();}
 function reset(){Object.values(state.dims).forEach(s=>s.clear());Object.assign(state,{search:'',review:'all',from:'',to:'',sign:'all',otMatch:'all',min:'',max:''});for(const [id,key] of Object.entries(bindings))$(id).value=state[key];Object.values(controls).forEach(c=>c.sync());refresh();}
 const bindings={'search':'search','review':'review','date-from':'from','date-to':'to','sign':'sign','ot-match':'otMatch','amount-min':'min','amount-max':'max'};
+const savedFiltersKey='mnt-scope-filters-v3';
+const legacySavedFilterKey='mnt-scope-filters-v2';
+function captureFilters(){return {version:3,currency,dims:Object.fromEntries(Object.keys(state.dims).map(k=>[k,[...state.dims[k]]])),fields:{search:state.search,review:state.review,from:state.from,to:state.to,sign:state.sign,otMatch:state.otMatch,min:state.min,max:state.max}};}
+function isStringArray(value){return Array.isArray(value)&&value.every(v=>typeof v==='string');}
+function readSavedFilters(){
+ const raw=localStorage.getItem(savedFiltersKey);
+ if(raw){const saved=JSON.parse(raw);if(!saved||saved.version!==3||!saved.dims||!saved.fields)throw Error('Filtros inválidos');return saved;}
+ const legacy=localStorage.getItem(legacySavedFilterKey);
+ if(legacy){const scope=JSON.parse(legacy);if(!scope||!['req','area','profit'].every(k=>isStringArray(scope[k]||[])))throw Error('Filtros inválidos');return {version:2,currency:'usd',dims:{req:scope.req||[],area:scope.area||[],profit:scope.profit||[]},fields:{}};}
+ return null;
+}
+function applySavedFilters(saved){
+ if(saved.currency==='usd'||saved.currency==='cop'){currency=saved.currency;$('currency').value=currency;if(sortKey==='usd'||sortKey==='cop')sortKey=currency;}
+ Object.values(state.dims).forEach(s=>s.clear());
+ for(const [key,values] of Object.entries(saved.dims||{}))if(state.dims[key]&&isStringArray(values))state.dims[key]=new Set(values);
+ Object.assign(state,{search:'',review:'all',from:'',to:'',sign:'all',otMatch:'all',min:'',max:''},saved.fields||{});
+ if(!['all','exclude','only'].includes(state.review))state.review='all';
+ if(!['all','positive','negative','zero'].includes(state.sign))state.sign='all';
+ if(!['all','matched','unmatched','zero'].includes(state.otMatch))state.otMatch='all';
+ for(const [id,key] of Object.entries(bindings))$(id).value=state[key]??'';
+ Object.values(controls).forEach(c=>c.sync());
+ refresh();
+}
+function updateSavedFilterButtons(){try{$('load-filters').disabled=!readSavedFilters();$('clear-saved-filters').disabled=!readSavedFilters();}catch{$('load-filters').disabled=false;$('clear-saved-filters').disabled=false;}}
 function chips(){let html='';for(const [key,s]of Object.entries(state.dims))if(s.size)html+=`<span class="chip">${esc(labels[key])}: ${esc([...s].slice(0,3).join(', '))}${s.size>3?' +'+(s.size-3):''}<button data-key="${key}" aria-label="Eliminar filtro ${esc(labels[key])}">×</button></span>`;
  const extras={search:state.search,review:state.review==='all'?'':state.review==='exclude'?'Sin asignación en revisión':'Solo asignación en revisión',from:state.from,to:state.to,sign:state.sign==='all'?'':state.sign==='positive'?'Cargos positivos':state.sign==='negative'?'Abonos negativos':'Importe cero',otMatch:state.otMatch==='all'?'':state.otMatch==='matched'?'Con OT IW39':state.otMatch==='zero'?'OT cero':'Sin OT IW39',min:state.min,max:state.max};
  const extraNames={search:'Búsqueda',review:'Asignación',from:'Desde',to:'Hasta',sign:'Movimiento',otMatch:'Vínculo OT',min:'Importe mínimo',max:'Importe máximo'};
@@ -78,28 +102,10 @@ async function init(){try{
  $('transactions').onclick=e=>{const b=e.target.closest('[data-sort]');if(b){if(sortKey===b.dataset.sort)sortDir*=-1;else{sortKey=b.dataset.sort;sortDir=1}renderTable();return}const tr=e.target.closest('[data-row]');if(tr)openRow(Number(tr.dataset.row))};$('transactions').onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-row]')){e.preventDefault();openRow(Number(e.target.dataset.row))}};
  $('prev').onclick=()=>{page--;renderTable()};$('next').onclick=()=>{page++;renderTable()};$('page-size').onchange=()=>{pageSize=Number($('page-size').value);page=0;renderTable()};$('close-dialog').onclick=()=>$('row-dialog').close();$('row-dialog').onclick=e=>{if(e.target===$('row-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close()}};
  $('maintenance-preset').onclick=()=>{state.dims.req=new Set(['GRAJALEJ','CHIPIAJH','SALANUEF','SANDOVAF']);controls.req.sync();refresh();toast('Regla M aplicada. SALANUEF y SANDOVAF no tienen movimientos en esta base. No es una lista exhaustiva de mantenimiento.')};
- const savedFilterKey='mnt-scope-filters-v2';
- function readSavedScope(){
-  const raw=localStorage.getItem(savedFilterKey);
-  if(raw){const value=JSON.parse(raw);if(!value||!['req','area','profit'].every(k=>Array.isArray(value[k])&&value[k].every(v=>typeof v==='string')))throw Error('Preferencias inválidas');return value;}
-  const legacy=localStorage.getItem('mnt-requisitioners-v1');
-  if(legacy){const req=JSON.parse(legacy);if(!Array.isArray(req)||!req.every(v=>typeof v==='string'))throw Error('Preferencias inválidas');return {req,area:[],profit:[]};}
-  return null;
- }
- function applySavedScope(scope){for(const key of ['req','area','profit']){state.dims[key]=new Set(scope[key]);controls[key].sync();}}
- $('save-req').onclick=()=>{try{const scope=Object.fromEntries(['req','area','profit'].map(k=>[k,[...state.dims[k]]]));localStorage.setItem(savedFilterKey,JSON.stringify(scope));$('load-req').hidden=false;toast('Solicitantes, área y centro de beneficio guardados. Se aplicarán al volver a abrir este tablero.')}catch{toast('Este navegador no permite guardar preferencias.')}};
- $('load-req').onclick=()=>{try{const scope=readSavedScope();if(scope){applySavedScope(scope);refresh();toast('Filtros guardados de solicitante, área y centro de beneficio aplicados.')}}catch{toast('No se pudo recuperar la selección guardada.')}};
- try{const scope=readSavedScope();$('load-req').hidden=!scope;if(scope)applySavedScope(scope);}catch{toast('No se pudieron leer los filtros guardados; puedes guardar una nueva selección.');}
- persistScope=()=>{try{
-  const scope=Object.fromEntries(['req','area','profit'].map(k=>[k,[...state.dims[k]]]));
-  localStorage.setItem(savedFilterKey,JSON.stringify(scope));
-  $('save-req').textContent='Guardado automático ✓';
-  $('save-req').title='Solicitante, área y centro de beneficio guardados en este navegador';
-  $('load-req').hidden=true;
- }catch{
-  $('save-req').textContent='No se pudo guardar';
-  $('save-req').title='El navegador está bloqueando el almacenamiento local. Mantén el mismo archivo y evita el modo privado.';
- }};
+ $('save-filters').onclick=()=>{try{localStorage.setItem(savedFiltersKey,JSON.stringify(captureFilters()));updateSavedFilterButtons();toast('Filtros guardados en este navegador. Usa Cargar filtros para recuperarlos.')}catch{toast('Este navegador no permite guardar filtros. Revisa si estás en modo privado o con almacenamiento bloqueado.')}};
+ $('load-filters').onclick=()=>{try{const saved=readSavedFilters();if(!saved){toast('No hay filtros guardados en este navegador.');updateSavedFilterButtons();return;}applySavedFilters(saved);updateSavedFilterButtons();toast('Filtros guardados aplicados.')}catch{toast('No se pudieron cargar los filtros guardados. Puedes borrarlos y guardar una nueva selección.')}};
+ $('clear-saved-filters').onclick=()=>{try{localStorage.removeItem(savedFiltersKey);localStorage.removeItem(legacySavedFilterKey);localStorage.removeItem('mnt-requisitioners-v1');updateSavedFilterButtons();toast('Filtros guardados borrados de este navegador.')}catch{toast('No se pudieron borrar los filtros guardados.')}};
+ updateSavedFilterButtons();
 
  document.addEventListener('click',e=>{document.querySelectorAll('.multi[open]').forEach(d=>{if(!d.contains(e.target))d.open=false})});document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.multi[open]').forEach(d=>{d.open=false;d.querySelector('summary').focus()})});
  const cutoff=meta.cutoff||'No disponible';
