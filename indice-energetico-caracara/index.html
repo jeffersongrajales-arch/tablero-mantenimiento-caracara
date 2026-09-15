@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Indice energetico Caracara</title>
   <meta name="description" content="Dashboard de energia importada Jaguar + Caracara Sur frente a fluidos movidos.">
-  <link rel="stylesheet" href="./styles.css?v=20260915-fix4">
+  <link rel="stylesheet" href="./styles.css?v=20260915-fix5">
 </head>
 <body>
   <header class="topbar">
@@ -125,8 +125,8 @@
           </div>
         </div>
         <div class="legend visible-legend">
-          <span><i class="legend-ccs"></i>Barra izquierda: Caracara Sur</span>
-          <span><i class="legend-jaguar"></i>Barra derecha: Jaguar</span>
+          <span><i class="legend-ccs"></i>Caracara Sur</span>
+          <span><i class="legend-jaguar"></i>Jaguar</span>
         </div>
         <div id="stationFluidChart" class="chart" role="img" aria-label="Fluidos movidos por estacion"></div>
       </article>
@@ -222,10 +222,10 @@
       <p>Energia: columna P de <strong>Potencia Bloque CCA.xlsx</strong>, hoja <strong>Cargas Bloque CC</strong>, como potencia promedio importada de red para Jaguar + Caracara Sur. Para el indice diario se multiplica por 24 y se expresa en kWh/dia.</p>
       <p>Fluidos: <strong>Resumen de Diferencias Operaciones Caracara</strong>, hoja <strong>Grandes Rubros</strong>: B crudo CCS, I agua inyectada CCS, V crudo Jaguar y AA agua inyectada Jaguar.</p>
       <p>Toro Sentado queda excluido porque trabaja con generacion local y no debe mezclarse con Jaguar + CCS.</p>
-      <p>Nota tecnica: el indice energetico consolidado es real para el sistema Jaguar + CCS. Los botones Jaguar y Caracara Sur filtran fluidos y tendencias por estacion; la energia continua siendo la importada total hasta tener medicion electrica separada por estacion.</p>
+      <p>Nota tecnica: el indice energetico consolidado es real para el sistema Jaguar + CCS. Los botones Jaguar y Caracara Sur filtran fluidos y recalculan una referencia de tendencia; la energia continua siendo la importada total hasta tener medicion electrica separada por estacion.</p>
     </section>
   </main>
 
-  <script src="./app.js?v=20260915-fix4"></script>
+  <script src="./app.js?v=20260915-fix5"></script>
 </body>
 </html>
