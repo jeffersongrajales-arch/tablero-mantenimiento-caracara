@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Indice energetico Caracara</title>
+  <meta name="description" content="Dashboard de energia importada Jaguar + Caracara Sur frente a fluidos movidos.">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Gestion de Mantenimiento</p>
+      <h1>Indice energetico Caracara</h1>
+    </div>
+    <div class="period-pill" id="periodLabel">Cargando periodo...</div>
+  </header>
+
+  <main>
+    <section class="control-band" aria-label="Filtros del dashboard">
+      <label>
+        Vista
+        <select id="viewMode">
+          <option value="monthly">Mensual</option>
+          <option value="daily">Diaria</option>
+        </select>
+      </label>
+      <label>
+        Desde
+        <input type="month" id="fromMonth">
+      </label>
+      <label>
+        Hasta
+        <input type="month" id="toMonth">
+      </label>
+      <button id="resetFilters" type="button">Restablecer</button>
+    </section>
+
+    <section class="kpi-grid" aria-label="Indicadores principales">
+      <article>
+        <span>Indice ponderado</span>
+        <strong id="kpiIndex">-</strong>
+        <small>kWh por bbl movido</small>
+      </article>
+      <article>
+        <span>Energia importada</span>
+        <strong id="kpiEnergy">-</strong>
+        <small>Jaguar + Caracara Sur</small>
+      </article>
+      <article>
+        <span>Fluidos movidos</span>
+        <strong id="kpiFluids">-</strong>
+        <small>Crudo + agua inyectada</small>
+      </article>
+      <article>
+        <span>Potencial vs P25</span>
+        <strong id="kpiSavings">-</strong>
+        <small>kWh evitables en el ultimo mes</small>
+      </article>
+    </section>
+
+    <section class="split">
+      <article class="panel chart-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Tendencia del indice</h2>
+            <p>Menor valor indica mejor eficiencia energetica.</p>
+          </div>
+          <span id="trendSignal" class="signal">-</span>
+        </div>
+        <div id="indexChart" class="chart" role="img" aria-label="Tendencia del indice energetico"></div>
+      </article>
+      <article class="panel chart-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Energia vs fluidos</h2>
+            <p>Compara demanda electrica con volumen operativo.</p>
+          </div>
+        </div>
+        <div id="energyFluidChart" class="chart" role="img" aria-label="Comparacion de energia y fluidos"></div>
+      </article>
+    </section>
+
+    <section class="split">
+      <article class="panel">
+        <h2>Conclusiones ejecutivas</h2>
+        <ul id="executiveFindings" class="finding-list"></ul>
+      </article>
+      <article class="panel">
+        <h2>Oportunidades de mejora</h2>
+        <ul id="opportunities" class="finding-list"></ul>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Meses y dias criticos</h2>
+          <p>Prioriza periodos con indice alto para revisar operacion, cargas y configuracion de equipos.</p>
+        </div>
+      </div>
+      <div class="tables">
+        <div>
+          <h3>Resumen mensual</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mes</th>
+                  <th>Indice</th>
+                  <th>Energia</th>
+                  <th>Fluidos</th>
+                  <th>Var. mes</th>
+                </tr>
+              </thead>
+              <tbody id="monthlyTable"></tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h3>Dias de mayor indice</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Indice</th>
+                  <th>Energia</th>
+                  <th>Fluidos</th>
+                </tr>
+              </thead>
+              <tbody id="criticalDays"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="method">
+      <h2>Criterio de calculo</h2>
+      <p>Energia: columna P de <strong>Potencia Bloque CCA.xlsx</strong>, hoja <strong>Cargas Bloque CC</strong>, como Total Importada Red (kW) de Jaguar + Caracara Sur. Para el indice diario se multiplica por 24 y se expresa en kWh/dia.</p>
+      <p>Fluidos: <strong>Resumen de Diferencias Operaciones Caracara</strong>, hoja <strong>Grandes Rubros</strong>: B crudo CCS, I agua inyectada CCS, V crudo Jaguar y AA agua inyectada Jaguar.</p>
+      <p>Toro Sentado queda excluido porque trabaja con generacion local y no debe mezclarse con Jaguar + CCS.</p>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
