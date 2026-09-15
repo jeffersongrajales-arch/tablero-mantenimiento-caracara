@@ -6,8 +6,15 @@ let source;
 
 const state = {
   mode: 'monthly',
+  station: 'total',
   from: '',
   to: '',
+};
+
+const stationNames = {
+  total: 'Total Jaguar + CCS',
+  jaguar: 'Jaguar',
+  ccs: 'Caracara Sur',
 };
 
 const byId = (id) => document.getElementById(id);
@@ -19,10 +26,6 @@ function monthInRange(month) {
 function dailyInRange(day) {
   const month = day.slice(0, 7);
   return monthInRange(month);
-}
-
-function sum(records, key) {
-  return records.reduce((acc, row) => acc + Number(row[key] || 0), 0);
 }
 
 function num(row, keys) {
@@ -40,7 +43,7 @@ function getEnergy(row) {
   return num(row, ['energy_kwh', 'energy_kwh_imported_jaguar_ccs']);
 }
 
-function getFluids(row) {
+function getTotalFluids(row) {
   return num(row, ['fluids_bbl', 'total_fluids_bbl']);
 }
 
@@ -52,13 +55,15 @@ function getJaguarFluids(row) {
   return num(row, ['fluids_jaguar_bbl', 'total_fluids_jaguar_bbl']);
 }
 
-function getIndex(row) {
-  return num(row, ['index_kwh_per_bbl', 'energy_index_kwh_per_bbl', 'avg_index']);
+function getSelectedFluids(row) {
+  if (state.station === 'ccs') return getCcsFluids(row);
+  if (state.station === 'jaguar') return getJaguarFluids(row);
+  return getTotalFluids(row);
 }
 
-function weightedIndex(records) {
-  const energy = records.reduce((acc, row) => acc + getEnergy(row), 0);
-  const fluids = records.reduce((acc, row) => acc + getFluids(row), 0);
+function getIndex(row) {
+  const energy = getEnergy(row);
+  const fluids = getSelectedFluids(row);
   return fluids ? energy / fluids : 0;
 }
 
@@ -109,24 +114,42 @@ function stationTotals(records) {
   };
 }
 
+function selectedTotals(records) {
+  const energy = records.reduce((acc, row) => acc + getEnergy(row), 0);
+  const fluids = records.reduce((acc, row) => acc + getSelectedFluids(row), 0);
+  return {
+    energy,
+    fluids,
+    index: fluids ? energy / fluids : 0,
+  };
+}
+
+function indexNote() {
+  if (state.station === 'total') return 'Indice real consolidado Jaguar + CCS';
+  return 'Referencia operativa con energia total importada';
+}
+
 function renderKpis() {
   const daily = filteredDaily();
   const monthly = filteredMonthly();
-  const energy = daily.reduce((acc, row) => acc + getEnergy(row), 0);
-  const fluids = daily.reduce((acc, row) => acc + getFluids(row), 0);
-  const index = fluids ? energy / fluids : 0;
+  const totals = selectedTotals(daily);
   const latest = monthly[monthly.length - 1] || source.highlights.latest_month;
   const baseline = source.totals.baseline_p25_kwh_per_bbl;
-  const saving = Math.max(0, (Number(latest.index_kwh_per_bbl || latest.avg_index || 0) - baseline) * Number(latest.fluids_bbl || 0));
+  const latestIndex = latest ? (getEnergy(latest) / (state.station === 'total' ? getTotalFluids(latest) : getSelectedFluids(latest) || getTotalFluids(latest))) : 0;
+  const latestFluids = latest ? (state.station === 'total' ? getTotalFluids(latest) : getSelectedFluids(latest)) : 0;
+  const saving = Math.max(0, (latestIndex - baseline) * latestFluids);
   const station = stationTotals(daily);
   const p75 = source.totals.p75_kwh_per_bbl;
   const p75Days = daily.filter((row) => getIndex(row) > p75).length;
   const dominant = station.ccs >= station.jaguar ? 'CCS' : 'Jaguar';
 
-  byId('kpiIndex').textContent = fmt1.format(index);
-  byId('kpiEnergy').textContent = formatEnergy(energy);
-  byId('kpiFluids').textContent = formatBbl(fluids);
+  byId('kpiIndex').textContent = fmt1.format(totals.index);
+  byId('kpiEnergy').textContent = formatEnergy(totals.energy);
+  byId('kpiFluids').textContent = formatBbl(totals.fluids);
   byId('kpiSavings').textContent = formatEnergy(saving);
+  byId('kpiIndexNote').textContent = indexNote();
+  byId('kpiEnergyNote').textContent = state.station === 'total' ? 'Jaguar + Caracara Sur' : 'Energia total usada como referencia';
+  byId('kpiFluidsNote').textContent = state.station === 'total' ? 'Crudo + agua inyectada' : `Fluidos de ${stationNames[state.station]}`;
   byId('kpiCcsFluids').textContent = formatBbl(station.ccs);
   byId('kpiJaguarFluids').textContent = formatBbl(station.jaguar);
   byId('kpiCcsShare').textContent = `${fmtPct.format(station.ccsShare * 100)}% del volumen`;
@@ -149,7 +172,7 @@ function chartScales(values, width, height, padding) {
   };
 }
 
-function lineChart(container, records, labelKey, valueKey, secondaryKey) {
+function lineChart(container, records, valueGetter, secondaryGetter) {
   const el = byId(container);
   if (!records.length) {
     el.innerHTML = '<p>No hay datos para el periodo seleccionado.</p>';
@@ -158,10 +181,10 @@ function lineChart(container, records, labelKey, valueKey, secondaryKey) {
   const width = 760;
   const height = 310;
   const padding = { top: 18, right: 24, bottom: 44, left: 52 };
-  const values = records.flatMap((row) => [Number(row[valueKey] || 0), secondaryKey ? Number(row[secondaryKey] || 0) : Number(row[valueKey] || 0)]).filter(Boolean);
+  const values = records.flatMap((row) => [valueGetter(row), secondaryGetter ? secondaryGetter(row) : valueGetter(row)]).filter(Boolean);
   const scale = chartScales(values, width, height, padding);
-  const path = records.map((row, i) => `${i ? 'L' : 'M'}${scale.x(i, records.length).toFixed(1)},${scale.y(Number(row[valueKey] || 0)).toFixed(1)}`).join(' ');
-  const secondaryPath = secondaryKey ? records.map((row, i) => `${i ? 'L' : 'M'}${scale.x(i, records.length).toFixed(1)},${scale.y(Number(row[secondaryKey] || 0)).toFixed(1)}`).join(' ') : '';
+  const path = records.map((row, i) => `${i ? 'L' : 'M'}${scale.x(i, records.length).toFixed(1)},${scale.y(valueGetter(row)).toFixed(1)}`).join(' ');
+  const secondaryPath = secondaryGetter ? records.map((row, i) => `${i ? 'L' : 'M'}${scale.x(i, records.length).toFixed(1)},${scale.y(secondaryGetter(row)).toFixed(1)}`).join(' ') : '';
   const ticks = [scale.min, scale.min + (scale.max - scale.min) / 2, scale.max];
   const labels = records.length > 9 ? records.filter((_, i) => i === 0 || i === records.length - 1 || i === Math.floor(records.length / 2)) : records;
   el.innerHTML = `
@@ -172,7 +195,7 @@ function lineChart(container, records, labelKey, valueKey, secondaryKey) {
       ${secondaryPath ? `<path class="line-secondary" d="${secondaryPath}"></path>` : ''}
       ${labels.map((row) => {
         const i = records.indexOf(row);
-        return `<text x="${scale.x(i, records.length)}" y="${height - 12}" text-anchor="${i === 0 ? 'start' : i === records.length - 1 ? 'end' : 'middle'}" class="axis">${row[labelKey]}</text>`;
+        return `<text x="${scale.x(i, records.length)}" y="${height - 12}" text-anchor="${i === 0 ? 'start' : i === records.length - 1 ? 'end' : 'middle'}" class="axis">${getLabel(row)}</text>`;
       }).join('')}
     </svg>`;
 }
@@ -187,9 +210,9 @@ function normalizedBarChart(container, records) {
   const height = 310;
   const padding = { top: 18, right: 22, bottom: 44, left: 52 };
   const firstEnergy = getEnergy(records[0]) || 1;
-  const firstFluids = getFluids(records[0]) || 1;
+  const firstFluids = getSelectedFluids(records[0]) || 1;
   const energyVals = records.map((row) => (getEnergy(row) / firstEnergy) * 100);
-  const fluidVals = records.map((row) => (getFluids(row) / firstFluids) * 100);
+  const fluidVals = records.map((row) => (getSelectedFluids(row) / firstFluids) * 100);
   const max = Math.max(...energyVals, ...fluidVals, 100) || 100;
   const min = Math.min(...energyVals, ...fluidVals, 100) || 0;
   const span = max - min || 1;
@@ -225,12 +248,15 @@ function stationFluidChart(container, records) {
   const width = 760;
   const height = 310;
   const padding = { top: 18, right: 22, bottom: 44, left: 52 };
+  const showTotal = state.station === 'total';
   const ccsVals = records.map((row) => getCcsFluids(row) / 1000);
   const jaguarVals = records.map((row) => getJaguarFluids(row) / 1000);
-  const max = Math.max(...ccsVals, ...jaguarVals) || 1;
+  const selectedVals = records.map((row) => getSelectedFluids(row) / 1000);
+  const allValues = showTotal ? [...ccsVals, ...jaguarVals] : selectedVals;
+  const max = Math.max(...allValues) || 1;
   const barArea = width - padding.left - padding.right;
   const group = barArea / records.length;
-  const bar = Math.max(3, Math.min(18, group / 3));
+  const bar = Math.max(3, Math.min(22, showTotal ? group / 3 : group / 2));
   const y = (v) => padding.top + (max - v) * (height - padding.top - padding.bottom) / max;
   const labels = records.length > 9 ? records.filter((_, i) => i === 0 || i === records.length - 1 || i === Math.floor(records.length / 2)) : records;
   el.innerHTML = `
@@ -239,6 +265,11 @@ function stationFluidChart(container, records) {
       ${[0, max / 2, max].map((tick) => `<text x="8" y="${y(tick) + 4}" class="axis">${fmt.format(tick)}k</text>`).join('')}
       ${records.map((row, i) => {
         const x = padding.left + i * group + group / 2;
+        if (!showTotal) {
+          const v = selectedVals[i];
+          const cls = state.station === 'jaguar' ? 'bar-jaguar' : 'bar-ccs';
+          return `<rect class="${cls}" x="${x - bar / 2}" y="${y(v)}" width="${bar}" height="${height - padding.bottom - y(v)}"></rect>`;
+        }
         const c = ccsVals[i];
         const j = jaguarVals[i];
         return `<rect class="bar-ccs" x="${x - bar - 1}" y="${y(c)}" width="${bar}" height="${height - padding.bottom - y(c)}"></rect>
@@ -254,42 +285,49 @@ function stationFluidChart(container, records) {
 function renderStationSummary() {
   const records = activeRecords();
   const station = stationTotals(records);
-  const systemIndex = weightedIndex(records);
+  const totals = selectedTotals(records);
   const dominant = station.ccs >= station.jaguar ? 'CCS' : 'Jaguar';
   const gap = Math.abs(station.ccsShare - station.jaguarShare) * 100;
+  const selected = stationNames[state.station];
+  const note = state.station === 'total'
+    ? 'El indice mostrado corresponde al sistema completo Jaguar + CCS.'
+    : `La vista esta filtrada a fluidos de ${selected}. La energia sigue siendo la importada total porque no hay medicion separada por estacion.`;
   byId('stationSummary').innerHTML = `
-    <div class="summary-row"><span>Indice real del sistema</span><strong>${fmt1.format(systemIndex)} kWh/bbl</strong></div>
+    <div class="summary-row"><span>Vista seleccionada</span><strong>${selected}</strong></div>
+    <div class="summary-row"><span>Indice mostrado</span><strong>${fmt1.format(totals.index)} kWh/bbl</strong></div>
     <div class="summary-row"><span>Participacion CCS</span><strong>${fmtPct.format(station.ccsShare * 100)}%</strong></div>
     <div class="summary-row"><span>Participacion Jaguar</span><strong>${fmtPct.format(station.jaguarShare * 100)}%</strong></div>
     <div class="summary-note">La estacion dominante en volumen es <strong>${dominant}</strong>. La diferencia de participacion es de ${fmtPct.format(gap)} puntos porcentuales.</div>
-    <div class="summary-note warn-note">Con la fuente actual no se calcula eficiencia electrica real separada por estacion porque la energia viene consolidada en una sola columna. Cuando se cargue energia CCS y energia Jaguar, esta seccion queda lista para mostrar kWh/bbl por estacion.</div>
+    <div class="summary-note warn-note">${note}</div>
   `;
 }
 
 function renderFindings() {
-  const totals = source.totals;
-  const latest = source.highlights.latest_month;
-  const best = source.highlights.best_month;
-  const worst = source.highlights.worst_month;
-  const change = source.highlights.period_change_pct_first_to_latest;
-  const corr = source.highlights.correlation_energy_vs_fluids;
+  const records = activeRecords();
+  const totals = selectedTotals(records);
+  const monthly = filteredMonthly();
+  const best = monthly.reduce((acc, row) => !acc || getIndex(row) < getIndex(acc) ? row : acc, null);
+  const worst = monthly.reduce((acc, row) => !acc || getIndex(row) > getIndex(acc) ? row : acc, null);
+  const first = monthly[0];
+  const latest = monthly[monthly.length - 1];
+  const change = first && latest && getIndex(first) ? ((getIndex(latest) / getIndex(first)) - 1) * 100 : 0;
   const direction = change > 0 ? 'aumento' : 'reduccion';
-  const station = stationTotals(filteredDaily());
-  const dominant = station.ccs >= station.jaguar ? 'CCS' : 'Jaguar';
+  const selected = stationNames[state.station];
+
   byId('executiveFindings').innerHTML = [
-    `El indice ponderado del periodo es <strong>${fmt1.format(totals.weighted_index_kwh_per_bbl)} kWh/bbl</strong>, calculado con ${formatEnergy(totals.energy_kwh)} y ${formatBbl(totals.fluids_bbl)}.`,
-    `El mejor mes fue <strong>${best.month}</strong> con ${fmt1.format(best.index_kwh_per_bbl)} kWh/bbl; el peor fue <strong>${worst.month}</strong> con ${fmt1.format(worst.index_kwh_per_bbl)} kWh/bbl.`,
-    `Entre el primer mes y ${latest.month} se observa un ${direction} de <strong>${fmtPct.format(Math.abs(change))}%</strong> en el indice mensual.`,
-    `La correlacion energia-fluidos es <strong>${fmt1.format(corr)}</strong>; la energia no sube de forma perfectamente proporcional al volumen, por eso conviene revisar cargas base y operacion fuera del punto eficiente.`,
-    `Por volumen movido, la estacion dominante del periodo seleccionado es <strong>${dominant}</strong>; esta lectura ayuda a enfocar el analisis operativo sin mezclar Toro Sentado.`
+    `La vista seleccionada es <strong>${selected}</strong>. El indice ponderado mostrado es <strong>${fmt1.format(totals.index)} kWh/bbl</strong>.`,
+    `El mejor mes de la vista fue <strong>${best?.month || '-'}</strong> con ${best ? fmt1.format(getIndex(best)) : '-'} kWh/bbl; el peor fue <strong>${worst?.month || '-'}</strong> con ${worst ? fmt1.format(getIndex(worst)) : '-'} kWh/bbl.`,
+    `Entre el primer mes y ${latest?.month || '-'} se observa un ${direction} de <strong>${fmtPct.format(Math.abs(change))}%</strong> en el indice mensual.`,
+    state.station === 'total'
+      ? `La correlacion energia-fluidos es <strong>${fmt1.format(source.highlights.correlation_energy_vs_fluids)}</strong>; la energia no sube de forma perfectamente proporcional al volumen.`
+      : `Para esta vista, el resultado ayuda a leer aporte de fluidos por estacion, pero no reemplaza una medicion electrica dedicada por estacion.`
   ].map((item) => `<li>${item}</li>`).join('');
 
   byId('opportunities').innerHTML = [
-    `Revisar los dias por encima del percentil 75 (${fmt1.format(totals.p75_kwh_per_bbl)} kWh/bbl): son candidatos para validar equipos en servicio, bombas operando fuera de curva, recirculaciones o restricciones de proceso.`,
-    `Usar el percentil 25 (${fmt1.format(totals.baseline_p25_kwh_per_bbl)} kWh/bbl) como referencia interna inicial. No es una meta contractual; sirve para detectar brechas operativas alcanzables con datos reales del mismo sistema.`,
-    `Cruzar los picos del indice con paradas, mantenimiento de bombas, cambios de pozo, presion de inyeccion y equipos auxiliares. El dashboard muestra el cuando; la causa debe confirmarse con bitacora operacional.`,
-    `Normalizar energia y fluidos evita comparar kWh contra barriles en una misma escala y permite ver si el consumo crece mas rapido que el volumen.`,
-    `Para eficiencia real por estacion se debe incorporar energia medida o estimada por barra/centro de carga de CCS y Jaguar. Mientras tanto, el site separa la contribucion de fluidos y los periodos criticos.`
+    `Revisar los dias por encima del percentil 75 (${fmt1.format(source.totals.p75_kwh_per_bbl)} kWh/bbl): validar equipos en servicio, bombas fuera de curva, recirculaciones o restricciones de proceso.`,
+    `Usar el percentil 25 (${fmt1.format(source.totals.baseline_p25_kwh_per_bbl)} kWh/bbl) como referencia interna inicial. No es meta contractual; es una brecha operacional con datos reales del sistema.`,
+    `Cruzar los picos con bitacora operacional, mantenimiento de bombas, cambios de pozo, presion de inyeccion y equipos auxiliares.`,
+    `Mantener separado Toro Sentado. Mezclar generacion local con red importada ocultaria la eficiencia real de Jaguar + CCS.`
   ].map((item) => `<li>${item}</li>`).join('');
 }
 
@@ -300,37 +338,37 @@ function renderTables() {
       <td>${row.month}</td>
       <td>${fmt1.format(getIndex(row))}</td>
       <td>${formatEnergy(getEnergy(row))}</td>
-      <td>${formatBbl(getFluids(row))}</td>
+      <td>${formatBbl(getSelectedFluids(row))}</td>
       <td>${row.delta_vs_prev_pct == null || row.delta_vs_prev_pct === '' ? '-' : `${fmtPct.format(row.delta_vs_prev_pct)}%`}</td>
     </tr>
   `).join('');
 
   const p75 = source.totals.p75_kwh_per_bbl;
-  const critical = source.high_index_days.filter((row) => dailyInRange(row.day)).slice(0, 10);
+  const critical = filteredDaily().slice().sort((a, b) => getIndex(b) - getIndex(a)).slice(0, 10);
   byId('criticalDays').innerHTML = critical.map((row) => {
     const index = getIndex(row);
     return `
-      <tr>
+      <tr class="${index > p75 ? 'critical-row' : ''}">
         <td>${row.day}</td>
         <td>${fmt1.format(index)}</td>
         <td>${formatEnergy(getEnergy(row))}</td>
-        <td>${formatBbl(getFluids(row))}</td>
-        <td><span class="status ${index > p75 ? 'bad' : 'warn'}">${index > p75 ? 'Sobre P75' : 'Revisar'}</span></td>
+        <td>${formatBbl(getSelectedFluids(row))}</td>
+        <td>${index > p75 ? 'Sobre P75' : 'Normal'}</td>
       </tr>
     `;
   }).join('');
 
   byId('stationTable').innerHTML = months.map((row) => {
+    const total = getTotalFluids(row);
     const ccs = getCcsFluids(row);
     const jaguar = getJaguarFluids(row);
-    const total = ccs + jaguar;
     const ccsShare = total ? ccs / total : 0;
     const jaguarShare = total ? jaguar / total : 0;
     const dominant = ccs >= jaguar ? 'CCS aporta mayor volumen' : 'Jaguar aporta mayor volumen';
     return `
       <tr>
         <td>${row.month}</td>
-        <td>${fmt1.format(getIndex(row))}</td>
+        <td>${fmt1.format(getEnergy(row) / (total || 1))}</td>
         <td>${formatBbl(ccs)}</td>
         <td>${fmtPct.format(ccsShare * 100)}%</td>
         <td>${formatBbl(jaguar)}</td>
@@ -345,7 +383,7 @@ function renderTrendSignal(records) {
   const el = byId('trendSignal');
   const last = records[records.length - 1];
   const prev = records[records.length - 2];
-  if (!last || !prev) {
+  if (!last || !prev || !getIndex(prev)) {
     el.textContent = 'Sin comparativo';
     el.className = 'signal';
     return;
@@ -357,10 +395,15 @@ function renderTrendSignal(records) {
 
 function renderCharts() {
   const records = activeRecords();
+  const selected = stationNames[state.station];
+  byId('indexChartNote').textContent = state.station === 'total'
+    ? 'Menor valor indica mejor eficiencia energetica consolidada.'
+    : `Vista ${selected}: energia total importada dividida por fluidos de la estacion seleccionada.`;
+
   if (state.mode === 'monthly') {
-    lineChart('indexChart', records, 'month', 'index_kwh_per_bbl');
+    lineChart('indexChart', records, getIndex);
   } else {
-    lineChart('indexChart', records, 'day', 'energy_index_kwh_per_bbl', 'rolling_7d_index');
+    lineChart('indexChart', records, getIndex, (row) => Number(row.rolling_7d_index || getIndex(row)));
   }
   normalizedBarChart('energyFluidChart', records);
   stationFluidChart('stationFluidChart', records);
@@ -376,12 +419,16 @@ function render() {
 }
 
 async function init() {
-  const response = await fetch('./data.json?v=20260915-fix2', { cache: 'no-store' });
+  const response = await fetch('./data.json?v=20260915-fix1', { cache: 'no-store' });
   source = await response.json();
   setFilters();
   render();
   byId('viewMode').addEventListener('change', (event) => {
     state.mode = event.target.value;
+    render();
+  });
+  byId('stationMode').addEventListener('change', (event) => {
+    state.station = event.target.value;
     render();
   });
   byId('fromMonth').addEventListener('change', (event) => {
@@ -403,7 +450,9 @@ async function init() {
   byId('resetFilters').addEventListener('click', () => {
     setFilters();
     state.mode = 'monthly';
+    state.station = 'total';
     byId('viewMode').value = 'monthly';
+    byId('stationMode').value = 'total';
     render();
   });
 }
