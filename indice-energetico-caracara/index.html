@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Indice energetico Caracara</title>
   <meta name="description" content="Dashboard de energia importada Jaguar + Caracara Sur frente a fluidos movidos.">
-  <link rel="stylesheet" href="./styles.css?v=20260915-fix2">
+  <link rel="stylesheet" href="./styles.css?v=20260915-fix3">
 </head>
 <body>
   <header class="topbar">
@@ -26,6 +26,14 @@
         </select>
       </label>
       <label>
+        Estacion
+        <select id="stationMode">
+          <option value="total">Total Jaguar + CCS</option>
+          <option value="jaguar">Jaguar</option>
+          <option value="ccs">Caracara Sur</option>
+        </select>
+      </label>
+      <label>
         Desde
         <input type="month" id="fromMonth">
       </label>
@@ -40,17 +48,17 @@
       <article>
         <span>Indice ponderado</span>
         <strong id="kpiIndex">-</strong>
-        <small>kWh por bbl movido</small>
+        <small id="kpiIndexNote">kWh por bbl movido</small>
       </article>
       <article>
         <span>Energia importada</span>
         <strong id="kpiEnergy">-</strong>
-        <small>Jaguar + Caracara Sur</small>
+        <small id="kpiEnergyNote">Jaguar + Caracara Sur</small>
       </article>
       <article>
         <span>Fluidos movidos</span>
         <strong id="kpiFluids">-</strong>
-        <small>Crudo + agua inyectada</small>
+        <small id="kpiFluidsNote">Crudo + agua inyectada</small>
       </article>
       <article>
         <span>Brecha vs P25</span>
@@ -87,7 +95,7 @@
         <div class="panel-head">
           <div>
             <h2>Tendencia del indice</h2>
-            <p>Menor valor indica mejor eficiencia energetica.</p>
+            <p id="indexChartNote">Menor valor indica mejor eficiencia energetica.</p>
           </div>
           <span id="trendSignal" class="signal">-</span>
         </div>
@@ -100,6 +108,10 @@
             <p>Ambas series se llevan a base 100 para comparar tendencia sin mezclar unidades.</p>
           </div>
         </div>
+        <div class="legend">
+          <span><i class="legend-energy"></i>Energia importada</span>
+          <span><i class="legend-fluid"></i>Fluidos movidos</span>
+        </div>
         <div id="energyFluidChart" class="chart" role="img" aria-label="Comparacion normalizada de energia y fluidos"></div>
       </article>
     </section>
@@ -111,6 +123,10 @@
             <h2>Fluidos por estacion</h2>
             <p>Permite ver si el volumen que explica el consumo viene mas de CCS o de Jaguar.</p>
           </div>
+        </div>
+        <div class="legend">
+          <span><i class="legend-ccs"></i>Caracara Sur</span>
+          <span><i class="legend-jaguar"></i>Jaguar</span>
         </div>
         <div id="stationFluidChart" class="chart" role="img" aria-label="Fluidos movidos por estacion"></div>
       </article>
@@ -206,10 +222,10 @@
       <p>Energia: columna P de <strong>Potencia Bloque CCA.xlsx</strong>, hoja <strong>Cargas Bloque CC</strong>, como potencia promedio importada de red para Jaguar + Caracara Sur. Para el indice diario se multiplica por 24 y se expresa en kWh/dia.</p>
       <p>Fluidos: <strong>Resumen de Diferencias Operaciones Caracara</strong>, hoja <strong>Grandes Rubros</strong>: B crudo CCS, I agua inyectada CCS, V crudo Jaguar y AA agua inyectada Jaguar.</p>
       <p>Toro Sentado queda excluido porque trabaja con generacion local y no debe mezclarse con Jaguar + CCS.</p>
-      <p>Nota tecnica: el indice energetico consolidado es real para el sistema Jaguar + CCS. La eficiencia individual por estacion queda preparada para medidores separados; mientras tanto, el site discrimina aporte de fluidos, participacion y periodos criticos por estacion.</p>
+      <p>Nota tecnica: el indice energetico consolidado es real para el sistema Jaguar + CCS. Cuando se selecciona Jaguar o Caracara Sur, el site filtra los fluidos de esa estacion y muestra la energia total importada como referencia operacional, no como medicion electrica individual.</p>
     </section>
   </main>
 
-  <script src="./app.js?v=20260915-fix2"></script>
+  <script src="./app.js?v=20260915-fix3"></script>
 </body>
 </html>
