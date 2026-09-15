@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Indice energetico Caracara</title>
   <meta name="description" content="Dashboard de energia importada Jaguar + Caracara Sur frente a fluidos movidos.">
-  <link rel="stylesheet" href="./styles.css?v=20260915-fix1">
+  <link rel="stylesheet" href="./styles.css?v=20260915-fix2">
 </head>
 <body>
   <header class="topbar">
@@ -53,9 +53,32 @@
         <small>Crudo + agua inyectada</small>
       </article>
       <article>
-        <span>Potencial vs P25</span>
+        <span>Brecha vs P25</span>
         <strong id="kpiSavings">-</strong>
-        <small>kWh evitables en el ultimo mes</small>
+        <small>kWh evitables estimados</small>
+      </article>
+    </section>
+
+    <section class="kpi-grid station-kpis" aria-label="Indicadores por estacion">
+      <article>
+        <span>Fluidos CCS</span>
+        <strong id="kpiCcsFluids">-</strong>
+        <small id="kpiCcsShare">Participacion del periodo</small>
+      </article>
+      <article>
+        <span>Fluidos Jaguar</span>
+        <strong id="kpiJaguarFluids">-</strong>
+        <small id="kpiJaguarShare">Participacion del periodo</small>
+      </article>
+      <article>
+        <span>Mayor participacion</span>
+        <strong id="kpiDominantStation">-</strong>
+        <small>Estacion que mas mueve fluido</small>
+      </article>
+      <article>
+        <span>Alerta P75</span>
+        <strong id="kpiP75Days">-</strong>
+        <small>Dias por encima del umbral</small>
       </article>
     </section>
 
@@ -73,11 +96,27 @@
       <article class="panel chart-panel">
         <div class="panel-head">
           <div>
-            <h2>Energia vs fluidos</h2>
-            <p>Compara demanda electrica con volumen operativo.</p>
+            <h2>Energia vs fluidos normalizados</h2>
+            <p>Ambas series se llevan a base 100 para comparar tendencia sin mezclar unidades.</p>
           </div>
         </div>
-        <div id="energyFluidChart" class="chart" role="img" aria-label="Comparacion de energia y fluidos"></div>
+        <div id="energyFluidChart" class="chart" role="img" aria-label="Comparacion normalizada de energia y fluidos"></div>
+      </article>
+    </section>
+
+    <section class="split">
+      <article class="panel chart-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Fluidos por estacion</h2>
+            <p>Permite ver si el volumen que explica el consumo viene mas de CCS o de Jaguar.</p>
+          </div>
+        </div>
+        <div id="stationFluidChart" class="chart" role="img" aria-label="Fluidos movidos por estacion"></div>
+      </article>
+      <article class="panel">
+        <h2>Lectura por estacion</h2>
+        <div id="stationSummary" class="station-summary"></div>
       </article>
     </section>
 
@@ -127,6 +166,7 @@
                   <th>Indice</th>
                   <th>Energia</th>
                   <th>Fluidos</th>
+                  <th>Alerta</th>
                 </tr>
               </thead>
               <tbody id="criticalDays"></tbody>
@@ -136,14 +176,40 @@
       </div>
     </section>
 
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Detalle mensual por estacion</h2>
+          <p>La eficiencia energetica real por estacion requiere energia medida por estacion. Con la fuente actual se muestra el volumen por estacion y el indice consolidado del sistema.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Mes</th>
+              <th>Indice sistema</th>
+              <th>Fluidos CCS</th>
+              <th>% CCS</th>
+              <th>Fluidos Jaguar</th>
+              <th>% Jaguar</th>
+              <th>Lectura</th>
+            </tr>
+          </thead>
+          <tbody id="stationTable"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="method">
       <h2>Criterio de calculo</h2>
-      <p>Energia: columna P de <strong>Potencia Bloque CCA.xlsx</strong>, hoja <strong>Cargas Bloque CC</strong>, como Total Importada Red (kW) de Jaguar + Caracara Sur. Para el indice diario se multiplica por 24 y se expresa en kWh/dia.</p>
+      <p>Energia: columna P de <strong>Potencia Bloque CCA.xlsx</strong>, hoja <strong>Cargas Bloque CC</strong>, como potencia promedio importada de red para Jaguar + Caracara Sur. Para el indice diario se multiplica por 24 y se expresa en kWh/dia.</p>
       <p>Fluidos: <strong>Resumen de Diferencias Operaciones Caracara</strong>, hoja <strong>Grandes Rubros</strong>: B crudo CCS, I agua inyectada CCS, V crudo Jaguar y AA agua inyectada Jaguar.</p>
       <p>Toro Sentado queda excluido porque trabaja con generacion local y no debe mezclarse con Jaguar + CCS.</p>
+      <p>Nota tecnica: el indice energetico consolidado es real para el sistema Jaguar + CCS. La eficiencia individual por estacion queda preparada para medidores separados; mientras tanto, el site discrimina aporte de fluidos, participacion y periodos criticos por estacion.</p>
     </section>
   </main>
 
-  <script src="./app.js?v=20260915-fix1"></script>
+  <script src="./app.js?v=20260915-fix2"></script>
 </body>
 </html>
