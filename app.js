@@ -61,6 +61,65 @@ function validText(value) {
   return value !== undefined && value !== null && String(value).trim() !== "";
 }
 
+function cleanCell(value) {
+  if (value === undefined || value === null) return "";
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  const text = String(value).trim();
+  if (!text || ["nan", "none", "nat"].includes(text.toLowerCase())) return "";
+  if (/^\d+\.0$/.test(text)) return text.slice(0, -2);
+  return text;
+}
+
+function normalizeUploadedRows(rawRows) {
+  const expandedNames = new Set([
+    "Repairs & Maintenance",
+    "Preventative Maintenance",
+    "General Maintenance",
+    "Downhole Well Maintenance",
+  ]);
+  return rawRows.map((raw) => {
+    const row = {};
+    for (const [key, value] of Object.entries(raw)) {
+      row[key] = key === "Amount_In_Usd" ? Number(value) || 0 : cleanCell(value);
+    }
+    const level3 = cleanCell(row["Level 3 (Summ FS)"]);
+    const area = cleanCell(row.Functional_Area_Name);
+    const wo = cleanCell(row.Wo_Number);
+    row.scope_strict = level3 === "Maintenance costs";
+    row.scope_expanded = expandedNames.has(area);
+    row.wo_valid = Boolean(wo && wo !== "0");
+    row.has_vendor = Boolean(cleanCell(row.Vendor_Number));
+    row.has_floc = Boolean(cleanCell(row.Functional_Location));
+    row.has_system = Boolean(cleanCell(row.Floc_System_Level4));
+    row.has_wbs = Boolean(cleanCell(row.Wbs_Element_Code));
+    row.month_label = cleanCell(row.Period_Number) ? `P${cleanCell(row.Period_Number).padStart(3, "0")}` : "";
+    row.station_label = cleanCell(row.Field) || cleanCell(row.Cost_Center_Name) || cleanCell(row.Profit_Center_Name) || "Sin clasificar";
+    return row;
+  }).filter((row) => row.scope_strict || row.scope_expanded);
+}
+
+function buildUploadedMeta(rows, fileName) {
+  const dateValues = rows.map((r) => cleanCell(r.Posting_Date)).filter(Boolean).sort();
+  const qualityFields = ["Wo_Number", "Vendor_Number", "Functional_Location", "Floc_System_Level4", "Floc_Segment_Level3", "Cost_Center_Name", "Field", "Department", "ACTIVIDAD", "Wbs_Element_Code"];
+  return {
+    source: fileName,
+    source_sheet: "Data",
+    grain: "Linea de documento contable SAP",
+    generated_at: new Date().toISOString().slice(0, 16).replace("T", " "),
+    rows: rows.length,
+    strict_rows: rows.filter(isStrict).length,
+    expanded_rows: rows.filter(isExpanded).length,
+    quality: qualityFields.map((field) => {
+      const present = rows.filter((r) => validText(r[field]) && String(r[field]).trim() !== "0").length;
+      return { field, present, missing: rows.length - present, coverage: rows.length ? present / rows.length : 0 };
+    }),
+    posting_min: dateValues[0] || "",
+    posting_max: dateValues[dateValues.length - 1] || "",
+    etl_max: "Archivo cargado por usuario",
+    partial_period: "009",
+  };
+}
+
 function isStrict(row) {
   return row.scope_strict === true;
 }
@@ -596,31 +655,81 @@ function bindEvents() {
   });
 
   $("#downloadCsv").addEventListener("click", downloadCsv);
+
+  $("#odsFile").addEventListener("change", async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const status = $("#fileStatus");
+    status.textContent = "Leyendo hoja Data...";
+    status.className = "file-status loading-text";
+    try {
+      const payload = await loadUploadedFile(file);
+      state.rows = payload.rows;
+      state.meta = payload.meta;
+      for (const key of Object.keys(state.filters)) state.filters[key] = key === "scope" ? "strict" : "";
+      $("#scopeFilter").value = "strict";
+      $("#searchBox").value = "";
+      $("#sourceLine").textContent = `${state.meta.source} · hoja Data · ${number.format(state.meta.rows)} líneas preparadas · posting ${state.meta.posting_min} a ${state.meta.posting_max}`;
+      populateFilters();
+      applyFilters();
+      renderPage();
+      status.textContent = `Archivo cargado: ${file.name} (${number.format(state.rows.length)} líneas de mantenimiento).`;
+      status.className = "file-status success-text";
+    } catch (error) {
+      console.error(error);
+      status.textContent = error.message || "No se pudo cargar el archivo.";
+      status.className = "file-status error-text";
+    }
+  });
 }
 
 async function init() {
-  const payload = await loadCompressedData();
-  state.rows = payload.rows;
-  state.meta = payload.meta;
-  $("#sourceLine").textContent = `${state.meta.source} · hoja ${state.meta.source_sheet} · ${number.format(state.meta.rows)} líneas preparadas · posting ${state.meta.posting_min} a ${state.meta.posting_max}`;
-  populateFilters();
-  applyFilters();
   bindEvents();
-  renderPage();
-  setPage("executive");
-  $("#loading").classList.add("hidden");
+  try {
+    const payload = await loadCompressedData();
+    state.rows = payload.rows;
+    state.meta = payload.meta;
+    $("#sourceLine").textContent = `${state.meta.source} · hoja ${state.meta.source_sheet} · ${number.format(state.meta.rows)} líneas preparadas · posting ${state.meta.posting_min} a ${state.meta.posting_max}`;
+    populateFilters();
+    applyFilters();
+    renderPage();
+    setPage("executive");
+    $("#loading").classList.add("hidden");
+  } catch (error) {
+    console.error(error);
+    $("#loading").textContent = "Seleccione un archivo XLSX para iniciar el dashboard.";
+    $("#fileStatus").textContent = "No se pudo cargar el snapshot. Puedes cargar el archivo ODS SAP desde aquí.";
+    $("#fileStatus").className = "file-status error-text";
+  }
 }
 
 async function loadCompressedData() {
-  if (!("DecompressionStream" in window)) {
-    throw new Error("Este navegador no soporta lectura gzip local del dataset.");
+  try {
+    if ("DecompressionStream" in window) {
+      const compressed = window.DASHBOARD_DATA_GZ_BASE64
+        ? base64ToArrayBuffer(window.DASHBOARD_DATA_GZ_BASE64)
+        : await fetch("./data/dashboard-data.json.gz").then((response) => response.arrayBuffer());
+      const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
+      return JSON.parse(await new Response(stream).text());
+    }
+  } catch (error) {
+    console.warn("No se pudo leer el snapshot comprimido; se intenta el respaldo JSON.", error);
   }
-  const compressed = window.DASHBOARD_DATA_GZ_BASE64
-    ? base64ToArrayBuffer(window.DASHBOARD_DATA_GZ_BASE64)
-    : await fetch("./data/dashboard-data.json.gz").then((response) => response.arrayBuffer());
-  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
-  const text = await new Response(stream).text();
-  return JSON.parse(text);
+  const response = await fetch("./data/dashboard-data.json", { cache: "no-store" });
+  if (!response.ok) throw new Error(`No se pudo cargar el respaldo de datos (${response.status}).`);
+  return response.json();
+}
+
+async function loadUploadedFile(file) {
+  if (!window.XLSX) throw new Error("No se pudo cargar el lector XLSX. Verifique la conexión y vuelva a intentar.");
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: true, raw: true });
+  if (!workbook.SheetNames.includes("Data")) throw new Error("El archivo no contiene una hoja llamada Data.");
+  const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets.Data, { defval: "", raw: true });
+  if (!rawRows.length) throw new Error("La hoja Data no contiene registros.");
+  const rows = normalizeUploadedRows(rawRows);
+  if (!rows.length) throw new Error("No se encontraron registros de mantenimiento en la hoja Data.");
+  return { rows, meta: buildUploadedMeta(rows, file.name) };
 }
 
 function base64ToArrayBuffer(base64) {

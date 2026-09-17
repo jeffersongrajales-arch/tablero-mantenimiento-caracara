@@ -119,6 +119,31 @@ input:focus {
   gap: 2px;
 }
 
+.upload-box {
+  margin: 14px 0 18px;
+  padding: 12px;
+  border: 1px solid #c9dfe5;
+  border-radius: 8px;
+  background: #eef8fa;
+}
+
+.upload-box input[type="file"] {
+  min-height: 42px;
+  padding: 8px;
+  background: #fff;
+}
+
+.file-status {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.success-text { color: var(--green); }
+.error-text { color: var(--red); }
+.loading-text { color: var(--amber); }
+
 .filter-actions {
   display: flex;
   gap: 10px;

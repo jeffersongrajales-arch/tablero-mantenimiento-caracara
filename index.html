@@ -6,7 +6,7 @@
     <title>Costos de Mantenimiento ODS SAP 2026</title>
     <meta
       name="description"
-      content="Dashboard gerencial público de costos de mantenimiento basado en ODS SAP 2026."
+      content="Dashboard gerencial privado de costos de mantenimiento basado en ODS SAP 2026."
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -28,6 +28,14 @@
             <option value="expanded">Mantenimiento ampliado</option>
           </select>
         </label>
+
+        <div class="upload-box">
+          <label class="field">
+            <span>Cargar archivo ODS SAP</span>
+            <input id="odsFile" type="file" accept=".xlsx,.xls" />
+          </label>
+          <p id="fileStatus" class="file-status">Usando el snapshot preparado del Site.</p>
+        </div>
 
         <div class="filter-grid">
           <label class="field"><span>Año</span><select id="yearFilter"></select></label>
@@ -63,7 +71,7 @@
       <main class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Tablero público</p>
+            <p class="eyebrow">Tablero privado</p>
             <h2>Costos de Mantenimiento ODS SAP 2026</h2>
             <p id="sourceLine" class="source-line">Cargando fuente...</p>
           </div>
@@ -101,8 +109,8 @@
     </div>
 
     <div id="loading" class="loading">Preparando dashboard...</div>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="./data.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
-
