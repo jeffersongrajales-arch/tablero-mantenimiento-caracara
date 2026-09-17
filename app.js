@@ -1,119 +1,636 @@
-'use strict';
-const $=id=>document.getElementById(id),E=CostEngine,esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const nf=new Intl.NumberFormat('es-CO',{maximumFractionDigits:0}),money=new Intl.NumberFormat('es-CO',{minimumFractionDigits:2,maximumFractionDigits:2});
-const months=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-const labels={req:'Solicitante de PO · Requisitioner',period:'Periodo fiscal',profit:'Centro de beneficio',station:'Estación / ámbito',area:'Área',vendor:'Proveedor',category:'Subcategoría',account:'Cuenta contable',cecoContable:'CECO contable del gasto',CECO_PO:'CECO de PO',costCenter:'Centro beneficiario original',senderCostCenter:'CECO emisor / cargado',planner:'Grupo planificador',ot:'Orden de trabajo · OT',po:'Pedido de compra · PO',kind:'Servicio / repuesto',docType:'Tipo de documento',otType:'Tipo de OT',workCenter:'Puesto de trabajo',equipment:'Equipo SAP',status:'Estado OT (IW39)',priority:'Prioridad OT',functionalArea:'Área funcional',contract:'Contrato OLA',sourceAdjustment:'Ajuste de fuente'};
-const detailLabels={period:'Periodo fiscal',date:'Fecha contabilización',documentDate:'Fecha documento',usd:'Importe USD',cop:'Importe COP',req:'Solicitante PO (Requisitioner)',station:'Estación / ámbito',area:'Área',vendor:'Proveedor',vendorId:'Número proveedor',account:'Cuenta',accountName:'Nombre cuenta',cecoContable:'CECO contable principal',cecoContableName:'Nombre CECO contable',CECO_PO:'CECO_PO',CECO_PO_Name:'Nombre CECO_PO',poAllocationPercent:'% asignación PO',costCenter:'Centro beneficiario original',senderCostCenter:'CECO emisor / cargado',costCenterName:'Nombre centro beneficiario',senderCostCenterName:'Nombre CECO emisor',sourceAdjustment:'Ajuste de fuente',sourceNote:'Nota de fuente',po:'Pedido PO',poLine:'Posición PO',ot:'Orden de trabajo',otName:'Descripción OT',doc:'Documento contable',docLine:'Posición documento',docType:'Tipo documento',docTypeName:'Nombre tipo documento',description:'Descripción movimiento',category:'Subcategoría',kind:'Servicio / repuesto',profit:'Centro de beneficio',planner:'Grupo planificador',plannerName:'Nombre grupo planificador',location:'Ubicación funcional',locationName:'Nombre ubicación',workCenter:'Puesto de trabajo',workCenterName:'Nombre puesto',contract:'Contrato OLA',material:'Material',materialName:'Nombre material',currency:'Moneda transacción',transactionAmount:'Importe transacción',functionalArea:'Área funcional',otType:'Tipo OT',invoice:'Factura',ses:'Entrada de servicio',equipment:'Equipo SAP (IW39)',equipmentName:'Descripción equipo',status:'Estado OT (IW39)',priority:'Prioridad OT',otCreated:'Creación OT',matchedOT:'Coincide con IW39',review:'Asignación en revisión'};
-let data=[],meta={},filtered=[],currency='usd',page=0,pageSize=25,sortKey='usd',sortDir=-1,currentView='overview',timer;
-const state={dims:{},search:'',review:'all',ceco2507:'exclude',from:'',to:'',sign:'all',otMatch:'all',min:'',max:''};
-const controls={};
-function fmt(v){return money.format(v||0)}function compact(v){const a=Math.abs(v);return (v<0?'−':'')+(a>=1e9?(a/1e9).toLocaleString('es-CO',{maximumFractionDigits:2})+' mil M':a>=1e6?(a/1e6).toLocaleString('es-CO',{maximumFractionDigits:2})+' M':a>=1e3?(a/1e3).toLocaleString('es-CO',{maximumFractionDigits:1})+' mil':nf.format(a));}
-function percent(v,total){return Math.abs(total)<.005?'—':(v/total*100).toLocaleString('es-CO',{maximumFractionDigits:1})+' %'}
-function labelFor(key,v){if(key==='period')return months[Number(v)-1]+' 2026';const names={account:'accountName',senderCostCenter:'senderCostCenterName',costCenter:'costCenterName',cecoContable:'cecoContableName',CECO_PO:'CECO_PO_Name',ot:'otName',equipment:'equipmentName',planner:'plannerName',workCenter:'workCenterName'};if(names[key]){const r=data.find(r=>E.clean(r[key])===v);return v+(r?.[names[key]]?' · '+r[names[key]]:'');}return v;}
-function toast(msg){$('toast').textContent=msg;$('toast').hidden=false;clearTimeout(timer);timer=setTimeout(()=>$('toast').hidden=true,6000)}
-function addFilter(key,target){
- state.dims[key]=new Set();const counts=new Map();for(const r of data){let v=E.clean(r[key]);counts.set(v,(counts.get(v)||0)+1)}
- const values=[...counts.keys()].sort((a,b)=>a.localeCompare(b,'es',{numeric:true}));if(key==='req'){values.sort((a,b)=>a==='Sin solicitante'?-1:b==='Sin solicitante'?1:a.localeCompare(b));}
- const box=document.createElement('div');box.innerHTML=`<label class="filter-label" id="lbl-${key}">${esc(labels[key])}</label><details class="multi"><summary aria-labelledby="lbl-${key} sum-${key}"><span class="summary-text" id="sum-${key}">Todos</span><span aria-hidden="true">⌄</span></summary><div class="popover"><input type="search" placeholder="Buscar ${key==='req'?'solicitante':'opción'}…" aria-label="Buscar en ${esc(labels[key])}"><div class="option-actions"><button type="button" class="text-button" data-act="visible">Seleccionar visibles</button><button type="button" class="text-button" data-act="clear">Todos / limpiar</button></div><div class="options"></div><p class="hint">Selección múltiple · opciones de toda la base.</p></div></details>`;
- $(target).append(box);const details=box.querySelector('details'),search=box.querySelector('input'),opts=box.querySelector('.options');
- const options=values.map(v=>({v,label:labelFor(key,v),n:counts.get(v)}));let visible=options;
- function draw(){const q=search.value.toLocaleLowerCase('es');visible=options.filter(o=>o.label.toLocaleLowerCase('es').includes(q));opts.innerHTML=visible.map((o,i)=>`<label class="option"><input type="checkbox" data-i="${i}" ${state.dims[key].has(o.v)?'checked':''}><span class="label">${esc(o.label)}</span><small>${nf.format(o.n)}</small></label>`).join('')||'<p class="hint">Sin coincidencias.</p>';}
- function sync(){const set=state.dims[key];box.querySelector('.summary-text').textContent=set.size===0?'Todos':set.size===1?labelFor(key,[...set][0]):`${set.size} seleccionados`;details.classList.toggle('selected',!!set.size);if(details.open)draw();}
- search.addEventListener('input',draw);opts.addEventListener('change',e=>{if(!e.target.matches('input'))return;const v=visible[Number(e.target.dataset.i)].v;e.target.checked?state.dims[key].add(v):state.dims[key].delete(v);sync();refresh()});
- box.querySelector('[data-act=clear]').onclick=()=>{state.dims[key].clear();sync();draw();refresh()};box.querySelector('[data-act=visible]').onclick=()=>{visible.forEach(o=>state.dims[key].add(o.v));sync();draw();refresh()};
- details.addEventListener('toggle',()=>{if(details.open){document.querySelectorAll('.multi[open]').forEach(d=>{if(d!==details)d.open=false});draw();search.focus()}});controls[key]={sync,details};
-}
-function setDim(key,value){state.dims[key]=new Set([value]);controls[key].sync();refresh();}
-function reset(){Object.values(state.dims).forEach(s=>s.clear());Object.assign(state,{search:'',review:'all',ceco2507:'exclude',from:'',to:'',sign:'all',otMatch:'all',min:'',max:''});for(const [id,key] of Object.entries(bindings))$(id).value=state[key];Object.values(controls).forEach(c=>c.sync());refresh();}
-const bindings={'search':'search','review':'review','ceco-2507':'ceco2507','date-from':'from','date-to':'to','sign':'sign','ot-match':'otMatch','amount-min':'min','amount-max':'max'};
-const savedFiltersKey='mnt-scope-filters-v3';
-const legacySavedFilterKey='mnt-scope-filters-v2';
-function captureFilters(){return {version:3,currency,dims:Object.fromEntries(Object.keys(state.dims).map(k=>[k,[...state.dims[k]]])),fields:{search:state.search,review:state.review,ceco2507:state.ceco2507,from:state.from,to:state.to,sign:state.sign,otMatch:state.otMatch,min:state.min,max:state.max}};}
-function isStringArray(value){return Array.isArray(value)&&value.every(v=>typeof v==='string');}
-function readSavedFilters(){
- const raw=localStorage.getItem(savedFiltersKey);
- if(raw){const saved=JSON.parse(raw);if(!saved||saved.version!==3||!saved.dims||!saved.fields)throw Error('Filtros inválidos');return saved;}
- const legacy=localStorage.getItem(legacySavedFilterKey);
- if(legacy){const scope=JSON.parse(legacy);if(!scope||!['req','area','profit'].every(k=>isStringArray(scope[k]||[])))throw Error('Filtros inválidos');return {version:2,currency:'usd',dims:{req:scope.req||[],area:scope.area||[],profit:scope.profit||[]},fields:{}};}
- return null;
-}
-function applySavedFilters(saved){
- if(saved.currency==='usd'||saved.currency==='cop'){currency=saved.currency;$('currency').value=currency;if(sortKey==='usd'||sortKey==='cop')sortKey=currency;}
- Object.values(state.dims).forEach(s=>s.clear());
- for(const [key,values] of Object.entries(saved.dims||{}))if(state.dims[key]&&isStringArray(values))state.dims[key]=new Set(values);
- Object.assign(state,{search:'',review:'all',ceco2507:'exclude',from:'',to:'',sign:'all',otMatch:'all',min:'',max:''},saved.fields||{});
- if(!['all','exclude','only'].includes(state.review))state.review='all';
- if(!['exclude','include'].includes(state.ceco2507))state.ceco2507='exclude';
- if(!['all','positive','negative','zero'].includes(state.sign))state.sign='all';
- if(!['all','matched','unmatched','zero'].includes(state.otMatch))state.otMatch='all';
- for(const [id,key] of Object.entries(bindings))$(id).value=state[key]??'';
- Object.values(controls).forEach(c=>c.sync());
- refresh();
-}
-function updateSavedFilterButtons(){try{const hasSaved=!!readSavedFilters();$('load-filters').disabled=!hasSaved;$('clear-saved-filters').disabled=!hasSaved;}catch{$('load-filters').disabled=false;$('clear-saved-filters').disabled=false;}}
-function chips(){let html='';for(const [key,s]of Object.entries(state.dims))if(s.size)html+=`<span class="chip">${esc(labels[key])}: ${esc([...s].slice(0,3).join(', '))}${s.size>3?' +'+(s.size-3):''}<button data-key="${key}" aria-label="Eliminar filtro ${esc(labels[key])}">×</button></span>`;
- const extras={search:state.search,review:state.review==='all'?'':state.review==='exclude'?'Sin asignación en revisión':'Solo asignación en revisión',ceco2507:state.ceco2507==='include'?'Incluye CECO 9150002507':'',from:state.from,to:state.to,sign:state.sign==='all'?'':state.sign==='positive'?'Cargos positivos':state.sign==='negative'?'Abonos negativos':'Importe cero',otMatch:state.otMatch==='all'?'':state.otMatch==='matched'?'Con OT IW39':state.otMatch==='zero'?'OT cero':'Sin OT IW39',min:state.min,max:state.max};
- const extraNames={search:'Búsqueda',review:'Asignación',ceco2507:'CECO opcional',from:'Desde',to:'Hasta',sign:'Movimiento',otMatch:'Vínculo OT',min:'Importe mínimo',max:'Importe máximo'};
- for(const [key,v]of Object.entries(extras))if(v!=='')html+=`<span class="chip">${extraNames[key]}: ${esc(v)}<button data-extra="${key}" aria-label="Eliminar ${extraNames[key]}">×</button></span>`;
- $('active-filters').innerHTML=html;
-}
-let persistScope=()=>{};
-function refresh(){persistScope();page=0;filtered=data.filter(r=>E.match(r,state,currency));chips();render();}
-function render(){
- const total=E.sum(filtered,currency),base=E.sum(data,currency),positive=E.sum(filtered.filter(r=>r[currency]>0),currency),negative=E.sum(filtered.filter(r=>r[currency]<0),currency);const missing=filtered.filter(r=>r.req==='Sin solicitante'),reviewRows=filtered.filter(r=>r.review);
- $('selection-count').innerHTML=`<strong>${nf.format(filtered.length)}</strong> de ${nf.format(data.length)} movimientos · ${percent(total,base)} del neto de la base`;
- const periods=[...new Set(filtered.map(r=>r.period))].sort();$('selection-scope').textContent=periods.length?`${periods.length} periodo${periods.length>1?'s':''} · ${currency.toUpperCase()}`:'Sin resultados';
- $('empty').hidden=!!filtered.length;$('results').hidden=!filtered.length;$('export').disabled=!filtered.length;
- $('k-net').textContent=compact(total);$('k-net-note').textContent=fmt(total)+' '+currency.toUpperCase();$('k-positive').textContent=compact(positive);$('k-negative').textContent='Abonos / reversos: '+compact(negative)+' '+currency.toUpperCase();
- const ots=new Set(filtered.filter(r=>Number(r.ot)).map(r=>r.ot)),pos=new Set(filtered.filter(r=>Number(r.po)).map(r=>r.po));$('k-orders').textContent=nf.format(ots.size)+' / '+nf.format(pos.size);
- $('k-missing').textContent=percent(missing.length,filtered.length);$('k-missing-note').textContent=nf.format(missing.length)+' movimientos · '+compact(E.sum(missing,currency))+' '+currency.toUpperCase();
- $('review-banner').hidden=!reviewRows.length;$('review-title').textContent=compact(E.sum(reviewRows,currency))+' '+currency.toUpperCase()+' de la selección están en revisión';$('review-description').textContent=`${nf.format(reviewRows.length)} movimientos · Cuenta 69901000 · 24 ago 2026. Incluidos en el neto; pendiente de conciliación con Finanzas/CO.`;
- if(currentView==='overview'){renderTrend();renderRanking();renderReq(total)}if(currentView==='detail')renderTable();if(currentView==='quality')renderQuality();
-}
-function renderTrend(){
- const gs=E.groups(filtered,'period',currency),map=new Map(gs.map(g=>[g.name,g])),vals=months.map((_,i)=>map.get(String(i+1).padStart(3,'0'))?.value||0),max=Math.max(...vals,0),min=Math.min(...vals,0);let span=max-min||1,pad=span*.13;const hi=max+pad,lo=min<0?min-pad:0,W=650,H=250,left=65,right=15,top=20,bottom=35,y=v=>top+(hi-v)/(hi-lo)*(H-top-bottom),step=(W-left-right)/12;
- let svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Gasto neto mensual en ${currency.toUpperCase()}">`;
- for(let i=0;i<4;i++){const v=lo+(hi-lo)*i/3;svg+=`<line x1="${left}" x2="${W-right}" y1="${y(v)}" y2="${y(v)}" stroke="#e9eef3"/><text x="${left-10}" y="${y(v)+4}" text-anchor="end">${esc(compact(v))}</text>`;}
- svg+=`<line x1="${left}" x2="${W-right}" y1="${y(0)}" y2="${y(0)}" stroke="#b4c4d1"/>`;
- months.forEach((m,i)=>{const period=String(i+1).padStart(3,'0'),g=map.get(period),v=vals[i],x=left+i*step+12,width=step-24;svg+=`<g class="month" tabindex="0" role="button" data-period="${period}" aria-label="Filtrar ${m} 2026: ${esc(fmt(v))} ${currency.toUpperCase()}"><title>${m} 2026: ${esc(fmt(v))} ${currency.toUpperCase()} · ${g?.n||0} movimientos</title><rect x="${x}" y="${Math.min(y(v),y(0))}" width="${width}" height="${Math.max(Math.abs(y(v)-y(0)),2)}" rx="3" fill="${g?.review?'#c1903f':'#168793'}"/><text x="${x+width/2}" y="${H-12}" text-anchor="middle">${m}</text></g>`});svg+='</svg>';$('trend').innerHTML=svg;$('chart-unit').textContent=currency.toUpperCase()+' · neto';
-}
-function renderRanking(){const key=$('ranking-dim').value,gs=E.groups(filtered,key,currency).slice(0,8),max=Math.max(...gs.map(g=>Math.abs(g.value)),1);$('ranking').innerHTML=gs.map((g,i)=>`<button class="ranking-row" data-key="${key}" data-value="${esc(g.name)}" title="Filtrar ${esc(labelFor(key,g.name))}"><div><div class="rank-title"><small>${String(i+1).padStart(2,'0')}</small><span>${esc(labelFor(key,g.name))}</span></div><div class="rank-track"><i style="width:${Math.abs(g.value)/max*100}%"></i></div></div><div class="rank-value">${esc(compact(g.value))}<small>${nf.format(g.n)} movimientos</small></div></button>`).join('');}
-function renderReq(total){const gs=E.groups(filtered,'req',currency),max=Math.max(...gs.map(g=>Math.abs(g.value)),1);$('req-coverage').textContent=gs.filter(g=>g.name!=='Sin solicitante').length+' solicitantes identificados';$('req-table').innerHTML=gs.map(g=>`<tr><td><button class="req-name" data-value="${esc(g.name)}">${esc(g.name)}</button></td><td class="num">${nf.format(g.n)}</td><td class="num">${nf.format(g.pos.size)}</td><td class="num">${fmt(g.value)}</td><td class="num">${percent(g.value,total)}</td><td><span class="table-bar"><i style="width:${Math.abs(g.value)/max*100}%"></i></span></td></tr>`).join('');}
-const tableCols=[['date','Contabilización'],['req','Solicitante PO'],['po','PO'],['cecoContable','CECO contable'],['CECO_PO','CECO_PO'],['ot','OT'],['station','Estación'],['vendor','Proveedor'],['account','Cuenta'],['description','Descripción'],['amount','Importe'],['review','Revisión']];
-function renderTable(){const rows=[...filtered].sort((a,b)=>{const av=a[sortKey],bv=b[sortKey];return(typeof av==='number'?av-(bv||0):String(av??'').localeCompare(String(bv??''),'es',{numeric:true}))*sortDir}),pages=Math.max(1,Math.ceil(rows.length/pageSize));page=Math.min(page,pages-1);const shown=rows.slice(page*pageSize,(page+1)*pageSize);$('transactions').querySelector('thead').innerHTML='<tr>'+tableCols.map(([k,l])=>`<th class="${k==='amount'?'num':''}"><button class="sort" data-sort="${k==='amount'?currency:k}">${l}${k==='amount'?' '+currency.toUpperCase():''} ${sortKey===(k==='amount'?currency:k)?sortDir===1?'↑':'↓':'↕'}</button></th>`).join('')+'</tr>';
- $('transactions').querySelector('tbody').innerHTML=shown.map(r=>`<tr class="transactions-row" data-row="${r._id}" tabindex="0" aria-label="Abrir documento ${esc(r.doc)} posición ${esc(r.docLine)}">${tableCols.map(([k])=>`<td class="${k==='amount'?'num':''}" title="${esc(k==='amount'?fmt(r[currency]):r[k])}">${k==='amount'?fmt(r[currency]):k==='review'?r.review?'<span class="flag">En revisión</span>':'—':esc(r[k]??'—')}</td>`).join('')}</tr>`).join('');
- $('page-info').textContent=`${rows.length?page*pageSize+1:0}–${Math.min((page+1)*pageSize,rows.length)} de ${nf.format(rows.length)} · Página ${page+1} de ${pages}`;$('prev').disabled=page===0;$('next').disabled=page>=pages-1;
-}
-function renderQuality(){const groups=[['Sin solicitante de PO',filtered.filter(r=>r.req==='Sin solicitante')],['Sin coincidencia con IW39',filtered.filter(r=>!r.matchedOT)],['Número de OT cero',filtered.filter(r=>!Number(r.ot))],['Ajuste fuente Oleoducto C1',filtered.filter(r=>r.sourceAdjustment)],['Estación “POR REVISAR”',filtered.filter(r=>r.station==='POR REVISAR')],['Asignación en revisión',filtered.filter(r=>r.review)],['Último periodo cargado (no acredita cierre)',filtered.filter(r=>r.period===[...new Set(data.map(x=>x.period))].sort().at(-1))]];$('quality-metrics').innerHTML=groups.map(([l,rs])=>`<div class="quality-metric"><span>${l}</span><strong>${nf.format(rs.length)} filas<br>${compact(E.sum(rs,currency))} ${currency.toUpperCase()}</strong></div>`).join('');}
-function view(name){currentView=name;document.querySelectorAll('.view').forEach(v=>v.hidden=v.id!==name);document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.view===name));render();}
-function openRow(id){const r=data[id];$('row-title').textContent=`Documento ${r.doc} · posición ${r.docLine}`;$('row-content').innerHTML='<div class="detail-grid">'+Object.entries(detailLabels).map(([k,l])=>`<div class="detail-item"><span>${esc(l)}</span><strong>${esc(typeof r[k]==='boolean'?r[k]?'Sí':'No':['usd','cop','transactionAmount'].includes(k)?fmt(r[k]):r[k]??'Sin dato')}</strong></div>`).join('')+'</div>';$('row-dialog').showModal();}
-function exportCSV(){const keys=Object.keys(detailLabels),safe=v=>{let s=String(v??'');if(typeof v==='string'&&/^[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"'};const content=[keys.map(k=>safe(detailLabels[k])).join(';'),...filtered.map(r=>keys.map(k=>safe(r[k])).join(';'))].join('\r\n');const blob=new Blob(['\ufeff'+content],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Gastos_mantenimiento_seleccion_'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast(`${nf.format(filtered.length)} movimientos exportados con importes USD y COP.`);}
-async function init(){try{
- const res=await fetch('data.json');if(!res.ok)throw Error('No se pudo cargar la base');meta=await res.json();data=meta.rows.map((r,i)=>Object.assign(Object.fromEntries(meta.columns.map((k,j)=>[k,r[j]])),{_id:i}));
- if(data.length!==meta.rowCount||Math.abs(E.sum(data,'usd')-meta.totalUSD)>.05)throw Error('La base no coincide con los totales verificados');
- addFilter('req','req-filter');for(const key of ['period','profit','station','area','vendor','category'])addFilter(key,'main-filters');for(const key of ['account','cecoContable','CECO_PO','costCenter','senderCostCenter','planner','ot','po','kind','docType','otType','workCenter','equipment','status','priority','functionalArea','contract'])addFilter(key,'extra-filters');
- for(const [id,key]of Object.entries(bindings))$(id).addEventListener(id==='search'?'input':'change',()=>{state[key]=$(id).value;if(id==='search'){clearTimeout(searchTimer);searchTimer=setTimeout(refresh,160)}else refresh()});
- $('currency').onchange=()=>{currency=$('currency').value;if(sortKey==='usd'||sortKey==='cop')sortKey=currency;refresh()};$('reset').onclick=reset;$('empty-reset').onclick=reset;$('export').onclick=exportCSV;
- $('advanced-toggle').onclick=()=>{const open=$('advanced').hidden;$('advanced').hidden=!open;$('advanced-toggle').setAttribute('aria-expanded',String(open));$('advanced-toggle').innerHTML=open?'Menos filtros −':'Más filtros ＋'};
- $('active-filters').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.key){state.dims[b.dataset.key].clear();controls[b.dataset.key].sync()}else{const key=b.dataset.extra;state[key]=key==='ceco2507'?'exclude':['review','sign','otMatch'].includes(key)?'all':'';$(Object.keys(bindings).find(id=>bindings[id]===key)).value=state[key]}refresh()};
- $('exclude-review').onclick=()=>{state.review='exclude';$('review').value='exclude';refresh()};$('ranking-dim').onchange=renderRanking;
- $('ranking').onclick=e=>{const b=e.target.closest('[data-value]');if(b)setDim(b.dataset.key,b.dataset.value)};$('req-table').onclick=e=>{const b=e.target.closest('[data-value]');if(b)setDim('req',b.dataset.value)};
- const chartClick=e=>{const g=e.target.closest('[data-period]');if(g)setDim('period',g.dataset.period)};$('trend').onclick=chartClick;$('trend').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();chartClick(e)}};
- document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>view(b.dataset.view));$('quality-link').onclick=()=>view('quality');
- $('transactions').onclick=e=>{const b=e.target.closest('[data-sort]');if(b){if(sortKey===b.dataset.sort)sortDir*=-1;else{sortKey=b.dataset.sort;sortDir=1}renderTable();return}const tr=e.target.closest('[data-row]');if(tr)openRow(Number(tr.dataset.row))};$('transactions').onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-row]')){e.preventDefault();openRow(Number(e.target.dataset.row))}};
- $('prev').onclick=()=>{page--;renderTable()};$('next').onclick=()=>{page++;renderTable()};$('page-size').onchange=()=>{pageSize=Number($('page-size').value);page=0;renderTable()};$('close-dialog').onclick=()=>$('row-dialog').close();$('row-dialog').onclick=e=>{if(e.target===$('row-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close()}};
- $('maintenance-preset').onclick=()=>{state.dims.req=new Set(['GRAJALEJ','CHIPIAJH','SALANUEF','SANDOVAF']);controls.req.sync();refresh();toast('Regla M aplicada. SALANUEF y SANDOVAF no tienen movimientos en esta base. No es una lista exhaustiva de mantenimiento.')};
- $('save-filters').onclick=()=>{try{localStorage.setItem(savedFiltersKey,JSON.stringify(captureFilters()));updateSavedFilterButtons();toast('Filtros guardados en este navegador. Usa Cargar filtros para recuperarlos.')}catch{toast('Este navegador no permite guardar filtros. Revisa si estás en modo privado o con almacenamiento bloqueado.')}};
- $('load-filters').onclick=()=>{try{const saved=readSavedFilters();if(!saved){toast('No hay filtros guardados en este navegador.');updateSavedFilterButtons();return;}applySavedFilters(saved);updateSavedFilterButtons();toast('Filtros guardados aplicados.')}catch{toast('No se pudieron cargar los filtros guardados. Puedes borrarlos y guardar una nueva selección.')}};
- $('clear-saved-filters').onclick=()=>{try{localStorage.removeItem(savedFiltersKey);localStorage.removeItem(legacySavedFilterKey);localStorage.removeItem('mnt-requisitioners-v1');updateSavedFilterButtons();toast('Filtros guardados borrados de este navegador.')}catch{toast('No se pudieron borrar los filtros guardados.')}};
- updateSavedFilterButtons();
+const state = {
+  rows: [],
+  filtered: [],
+  meta: null,
+  page: "executive",
+  filters: {
+    scope: "strict",
+    Fiscal_Year: "",
+    Period_Number: "",
+    station_label: "",
+    Profit_Center_Name: "",
+    Functional_Area_Name: "",
+    Account_Name: "",
+    Wo_Type: "",
+    Vendor_Name: "",
+    Functional_Location: "",
+    Gross_Indicator: "",
+    search: "",
+  },
+};
 
- document.addEventListener('click',e=>{document.querySelectorAll('.multi[open]').forEach(d=>{if(!d.contains(e.target))d.open=false})});document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.multi[open]').forEach(d=>{d.open=false;d.querySelector('summary').focus()})});
- const cutoff=meta.cutoff||'No disponible';
- $('data-freshness').textContent='Carga ODS máxima: '+cutoff+' · Contabilización máxima: '+(meta.postingMax||data.map(r=>r.date).sort().at(-1))+' · Archivo: '+meta.source;
- $('generated-at').textContent=meta.generatedAt?'Tablero generado: '+new Date(meta.generatedAt).toLocaleString('es-CO'):'Versión inicial';
- $('rail-cutoff').textContent='Carga ODS máxima: '+cutoff;
- for(const id of ['date-from','date-to']){$(id).min=data.map(r=>r.date).sort()[0];$(id).max=data.map(r=>r.date).sort().at(-1)}
- $('loading').hidden=true;$('app').hidden=false;refresh();
- }catch(e){$('loading').innerHTML='<h2>No pudimos cargar los gastos</h2><p>Recarga la página para volver a intentarlo.</p>';$('loading').setAttribute('role','alert');console.error(e)}}
-let searchTimer;init();
+const ids = {
+  scope: "scopeFilter",
+  Fiscal_Year: "yearFilter",
+  Period_Number: "monthFilter",
+  station_label: "stationFilter",
+  Profit_Center_Name: "profitFilter",
+  Functional_Area_Name: "areaFilter",
+  Account_Name: "accountFilter",
+  Wo_Type: "woTypeFilter",
+  Vendor_Name: "vendorFilter",
+  Functional_Location: "flocFilter",
+  Gross_Indicator: "grossFilter",
+};
+
+const money = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
+const number = new Intl.NumberFormat("es-CO");
+const percent = new Intl.NumberFormat("es-CO", { style: "percent", maximumFractionDigits: 1 });
+
+function $(selector) {
+  return document.querySelector(selector);
+}
+
+function el(tag, className, html) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (html !== undefined) node.innerHTML = html;
+  return node;
+}
+
+function amount(row) {
+  return Number(row.Amount_In_Usd || 0);
+}
+
+function validText(value) {
+  return value !== undefined && value !== null && String(value).trim() !== "";
+}
+
+function isStrict(row) {
+  return row.scope_strict === true;
+}
+
+function isExpanded(row) {
+  return row.scope_expanded === true;
+}
+
+function isSelectedScope(row) {
+  return state.filters.scope === "strict" ? isStrict(row) : isStrict(row) || isExpanded(row);
+}
+
+function sum(rows, selector = amount) {
+  return rows.reduce((acc, row) => acc + selector(row), 0);
+}
+
+function uniq(rows, key, limit = 600) {
+  const values = Array.from(
+    new Set(rows.map((row) => row[key]).filter((value) => validText(value))),
+  ).sort((a, b) => String(a).localeCompare(String(b), "es"));
+  return values.slice(0, limit);
+}
+
+function groupSum(rows, key, options = {}) {
+  const { validOnly = false, includeBlank = false } = options;
+  const map = new Map();
+  for (const row of rows) {
+    let label = row[key];
+    if (!validText(label)) {
+      if (!includeBlank) continue;
+      label = "Sin dato";
+    }
+    if (validOnly && String(label).trim() === "0") continue;
+    map.set(label, (map.get(label) || 0) + amount(row));
+  }
+  return Array.from(map, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+}
+
+function groupCount(rows, key, options = {}) {
+  const { includeBlank = false, validOnly = false } = options;
+  const map = new Map();
+  for (const row of rows) {
+    let label = row[key];
+    if (!validText(label)) {
+      if (!includeBlank) continue;
+      label = "Sin dato";
+    }
+    if (validOnly && String(label).trim() === "0") continue;
+    map.set(label, (map.get(label) || 0) + 1);
+  }
+  return Array.from(map, ([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+}
+
+function metrics(rows) {
+  const net = sum(rows);
+  const positive = sum(rows.filter((row) => amount(row) > 0));
+  const negative = sum(rows.filter((row) => amount(row) < 0));
+  const validWoRows = rows.filter((row) => row.wo_valid);
+  const vendorRows = rows.filter((row) => row.has_vendor);
+  const flocRows = rows.filter((row) => row.has_floc);
+  const noWo = rows.filter((row) => !row.wo_valid);
+  const top20 = groupSum(rows, "Cost_Center_Name").slice(0, 20);
+  const top20Share = net ? sum(top20, (row) => row.value) / net : 0;
+  return {
+    net,
+    positive,
+    negative,
+    rows: rows.length,
+    woPct: rows.length ? validWoRows.length / rows.length : 0,
+    vendorPct: rows.length ? vendorRows.length / rows.length : 0,
+    flocPct: rows.length ? flocRows.length / rows.length : 0,
+    noWoCost: sum(noWo),
+    top20Share,
+  };
+}
+
+function optionize(select, values, labelAll = "Todos") {
+  const current = select.value;
+  select.innerHTML = "";
+  select.append(new Option(labelAll, ""));
+  for (const value of values) select.append(new Option(value, value));
+  select.value = values.includes(current) ? current : "";
+}
+
+function populateFilters() {
+  const scoped = state.rows.filter(isSelectedScope);
+  optionize($(ids.Fiscal_Year), uniq(scoped, "Fiscal_Year"), "Todos");
+  optionize($(ids.Period_Number), uniq(scoped, "Period_Number"), "Todos");
+  optionize($(ids.station_label), uniq(scoped, "station_label"), "Todos");
+  optionize($(ids.Profit_Center_Name), uniq(scoped, "Profit_Center_Name"), "Todos");
+  optionize($(ids.Functional_Area_Name), uniq(scoped, "Functional_Area_Name"), "Todas");
+  optionize($(ids.Account_Name), uniq(scoped, "Account_Name"), "Todas");
+  optionize($(ids.Wo_Type), uniq(scoped, "Wo_Type"), "Todos");
+  optionize($(ids.Vendor_Name), uniq(scoped, "Vendor_Name"), "Todos");
+  optionize($(ids.Functional_Location), uniq(scoped, "Functional_Location"), "Todas");
+  optionize($(ids.Gross_Indicator), uniq(scoped, "Gross_Indicator"), "Todos");
+}
+
+function applyFilters() {
+  const search = state.filters.search.toLowerCase();
+  state.filtered = state.rows.filter((row) => {
+    if (!isSelectedScope(row)) return false;
+    for (const [key, value] of Object.entries(state.filters)) {
+      if (!value || key === "scope" || key === "search") continue;
+      if (row[key] !== value) return false;
+    }
+    if (!search) return true;
+    const haystack = [
+      row.Wo_Number,
+      row.Wo_Description,
+      row.Account_Name,
+      row.Vendor_Name,
+      row.Functional_Location,
+      row.Functional_Location_Name,
+      row.Accounting_Document,
+      row.Document_Line_Description,
+      row.Cost_Center_Name,
+    ]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(search);
+  });
+}
+
+function renderKpis() {
+  const m = metrics(state.filtered);
+  const kpis = [
+    ["Costo neto", money.format(m.net), "Suma de Amount_In_Usd"],
+    ["Costo positivo", money.format(m.positive), "Debitos y cargos positivos"],
+    ["Créditos / reversos", money.format(m.negative), "Valores negativos del periodo"],
+    ["Registros", number.format(m.rows), "Líneas contables filtradas"],
+    ["Con OT válida", percent.format(m.woPct), "Wo_Number distinto de 0"],
+    ["Con proveedor", percent.format(m.vendorPct), "Vendor_Number informado"],
+    ["Con ubicación técnica", percent.format(m.flocPct), "Functional_Location informado"],
+    ["Costo sin OT válida", money.format(m.noWoCost), "Brecha de trazabilidad"],
+  ];
+  const grid = $("#kpiGrid");
+  grid.innerHTML = "";
+  for (const [label, value, note] of kpis) {
+    grid.append(el("article", "kpi", `<span>${label}</span><strong>${value}</strong><small>${note}</small>`));
+  }
+}
+
+function card(title, subtitle, body) {
+  return `<article class="card"><div class="card-header"><div><h3>${title}</h3><p>${subtitle}</p></div></div>${body}</article>`;
+}
+
+function bars(data, formatter = money.format, maxItems = 12, mode = "positive") {
+  const rows = data.slice(0, maxItems);
+  const max = Math.max(...rows.map((d) => Math.abs(d.value)), 1);
+  return `<div class="chart">${rows
+    .map((d) => {
+      const width = Math.max(1, (Math.abs(d.value) / max) * 100);
+      const cls = d.value < 0 ? "bar-fill negative" : "bar-fill";
+      return `<div class="bar-row">
+        <div class="bar-label" title="${escapeHtml(d.label)}">${escapeHtml(d.label)}</div>
+        <div class="bar-track"><div class="${cls}" style="width:${width}%"></div></div>
+        <div class="bar-value">${formatter(d.value)}</div>
+      </div>`;
+    })
+    .join("")}</div>`;
+}
+
+function lineChart(monthRows) {
+  const months = ["001", "002", "003", "004", "005", "006", "007", "008", "009"];
+  const values = months.map((month) => monthRows.get(month) || 0);
+  const min = Math.min(...values, 0);
+  const max = Math.max(...values, 1);
+  const width = 720;
+  const height = 260;
+  const pad = 36;
+  const points = values.map((value, index) => {
+    const x = pad + (index * (width - pad * 2)) / (months.length - 1);
+    const y = height - pad - ((value - min) / (max - min || 1)) * (height - pad * 2);
+    return { x, y, value, month: months[index] };
+  });
+  const path = points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${p.y}`).join(" ");
+  const zeroY = height - pad - ((0 - min) / (max - min || 1)) * (height - pad * 2);
+  return `<div class="chart"><svg class="svg-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Evolución mensual">
+    <line x1="${pad}" x2="${width - pad}" y1="${zeroY}" y2="${zeroY}" stroke="#d9e3e8" stroke-width="2" />
+    <path d="${path}" fill="none" stroke="#14718a" stroke-width="4" stroke-linecap="round" />
+    ${points
+      .map(
+        (p) => `<g>
+          <circle cx="${p.x}" cy="${p.y}" r="5" fill="#0d4e63"></circle>
+          <text x="${p.x}" y="${height - 10}" text-anchor="middle" font-size="12" fill="#60717a">P${p.month}</text>
+          <title>P${p.month}: ${money.format(p.value)}</title>
+        </g>`,
+      )
+      .join("")}
+  </svg></div>`;
+}
+
+function table(columns, rows, limit = 80) {
+  return `<div class="table-wrap"><table>
+    <thead><tr>${columns.map((c) => `<th class="${c.num ? "num" : ""}">${c.label}</th>`).join("")}</tr></thead>
+    <tbody>${rows
+      .slice(0, limit)
+      .map(
+        (row) =>
+          `<tr>${columns
+            .map((c) => `<td class="${c.num ? "num" : ""}">${c.render ? c.render(row) : escapeHtml(row[c.key] ?? "")}</td>`)
+            .join("")}</tr>`,
+      )
+      .join("")}</tbody>
+  </table></div>`;
+}
+
+function topTable(key, extra = {}) {
+  const data = groupSum(state.filtered, key, extra).slice(0, 20);
+  const total = sum(state.filtered) || 1;
+  return table(
+    [
+      { label: "Elemento", key: "label" },
+      { label: "Costo neto", num: true, render: (r) => money.format(r.value) },
+      { label: "Participación", num: true, render: (r) => percent.format(r.value / total) },
+    ],
+    data,
+    20,
+  );
+}
+
+function renderExecutive() {
+  const byMonth = new Map();
+  for (const row of state.filtered) byMonth.set(row.Period_Number, (byMonth.get(row.Period_Number) || 0) + amount(row));
+  const html = `
+    <div class="grid-2">
+      ${card("Evolución mensual", "Costo neto por periodo fiscal. Septiembre es parcial.", lineChart(byMonth))}
+      ${card("Pareto por centro de costo", "Concentración de la ejecución financiera.", bars(groupSum(state.filtered, "Cost_Center_Name")))}
+    </div>
+    <div class="grid-3" style="margin-top:14px">
+      ${card("Costo por área funcional", "Naturaleza financiera del gasto.", bars(groupSum(state.filtered, "Functional_Area_Name"), money.format, 10))}
+      ${card("Costo por cuenta", "Cuentas contables con mayor peso.", bars(groupSum(state.filtered, "Account_Name"), money.format, 10))}
+      ${card("Alertas de trazabilidad", "Cobertura de campos críticos.", qualityBadges())}
+    </div>`;
+  $("#pageExecutive").innerHTML = html;
+}
+
+function qualityBadges() {
+  const m = metrics(state.filtered);
+  return `<div class="chart">
+    <p><span class="badge ${m.woPct >= 0.8 ? "good" : "warn"}">${percent.format(m.woPct)}</span> con OT válida</p>
+    <p><span class="badge ${m.flocPct >= 0.8 ? "good" : "warn"}">${percent.format(m.flocPct)}</span> con ubicación técnica</p>
+    <p><span class="badge ${m.vendorPct >= 0.6 ? "good" : "warn"}">${percent.format(m.vendorPct)}</span> con proveedor</p>
+    <p><span class="badge warn">${money.format(m.noWoCost)}</span> costo sin OT válida</p>
+    <p><span class="badge warn">${percent.format(m.top20Share)}</span> concentración Top 20 centro de costo</p>
+  </div>`;
+}
+
+function renderStation() {
+  const grouped = groupSum(state.filtered, "Cost_Center_Name");
+  const rows = grouped.map((g) => {
+    const subset = state.filtered.filter((r) => (r.Cost_Center_Name || "Sin dato") === g.label);
+    return {
+      label: g.label,
+      value: g.value,
+      rows: subset.length,
+      wo: subset.length ? subset.filter((r) => r.wo_valid).length / subset.length : 0,
+      vendor: subset.length ? subset.filter((r) => r.has_vendor).length / subset.length : 0,
+    };
+  });
+  $("#pageStation").innerHTML = `
+    <div class="grid-2">
+      ${card("Ranking de centros de costo", "Costo neto por centro de costo.", bars(grouped, money.format, 15))}
+      ${card("Profit center", "Distribución gerencial por profit center.", bars(groupSum(state.filtered, "Profit_Center_Name"), money.format, 15))}
+    </div>
+    <div style="margin-top:14px">${card(
+      "Detalle por centro de costo",
+      "Incluye cobertura de OT y proveedor.",
+      table(
+        [
+          { label: "Centro de costo", key: "label" },
+          { label: "Costo neto", num: true, render: (r) => money.format(r.value) },
+          { label: "Registros", num: true, render: (r) => number.format(r.rows) },
+          { label: "% OT válida", num: true, render: (r) => percent.format(r.wo) },
+          { label: "% proveedor", num: true, render: (r) => percent.format(r.vendor) },
+        ],
+        rows,
+        80,
+      ),
+    )}</div>`;
+}
+
+function renderAccount() {
+  $("#pageAccount").innerHTML = `
+    <div class="grid-2">
+      ${card("Área funcional", "Clasificación financiera principal.", bars(groupSum(state.filtered, "Functional_Area_Name"), money.format, 14))}
+      ${card("Cuenta contable", "Pareto de cuentas.", bars(groupSum(state.filtered, "Account_Name"), money.format, 14))}
+    </div>
+    <div class="grid-2" style="margin-top:14px">
+      ${card("Nivel financiero", "Vista por Level 3.", topTable("Level 3 (Summ FS)"))}
+      ${card("Departamento / actividad", "Clasificación auxiliar cuando existe.", topTable("Department", { includeBlank: true }))}
+    </div>`;
+}
+
+function renderOrders() {
+  const validRows = state.filtered.filter((r) => r.wo_valid);
+  const invalidCost = sum(state.filtered.filter((r) => !r.wo_valid));
+  $("#pageOrders").innerHTML = `
+    <div class="grid-3">
+      ${card("Top 20 OT válidas", "Wo_Number = 0 está excluido.", topTable("Wo_Number", { validOnly: true }))}
+      ${card("Tipo de OT", "Solo filas con tipo informado.", bars(groupSum(validRows, "Wo_Type"), money.format, 12))}
+      ${card("Actividad de OT", "Preventivo, correctivo, predictivo u otros.", bars(groupSum(validRows, "Wo_Activity_Type"), money.format, 12))}
+    </div>
+    <div class="grid-2" style="margin-top:14px">
+      ${card("Costo sin OT válida", "Debe tratarse como brecha de trazabilidad.", `<div class="chart"><div class="kpi"><span>Costo sin OT válida</span><strong>${money.format(invalidCost)}</strong><small>No incluir en ranking de OT</small></div></div>`)}
+      ${card("Detalle OT", "Primeras 80 OT por costo neto.", orderDetail(validRows))}
+    </div>`;
+}
+
+function orderDetail(rows) {
+  const grouped = groupSum(rows, "Wo_Number", { validOnly: true }).slice(0, 80);
+  const details = grouped.map((g) => {
+    const first = rows.find((r) => r.Wo_Number === g.label) || {};
+    return { ...g, desc: first.Wo_Description, type: first.Wo_Type, activity: first.Wo_Activity_Type, floc: first.Functional_Location };
+  });
+  return table(
+    [
+      { label: "OT", key: "label" },
+      { label: "Descripción", key: "desc" },
+      { label: "Tipo", key: "type" },
+      { label: "Actividad", key: "activity" },
+      { label: "Ubicación", key: "floc" },
+      { label: "Costo neto", num: true, render: (r) => money.format(r.value) },
+    ],
+    details,
+    80,
+  );
+}
+
+function renderTechnical() {
+  const withFloc = state.filtered.filter((r) => r.has_floc);
+  $("#pageTechnical").innerHTML = `
+    <div class="grid-2">
+      ${card("Top ubicaciones técnicas", "Costo neto solo donde existe Functional_Location.", topTable("Functional_Location"))}
+      ${card("Sistemas", "Cobertura limitada; requiere IH01 para tablero técnico completo.", bars(groupSum(withFloc, "Floc_System_Level4", { includeBlank: true }), money.format, 14))}
+    </div>
+    <div class="grid-2" style="margin-top:14px">
+      ${card("Segmentos / subsistemas", "Campo auxiliar con baja cobertura.", bars(groupSum(withFloc, "Floc_Segment_Level3", { includeBlank: true }), money.format, 14))}
+      ${card("Activos", "Asset no equivale a equipo SAP individual.", topTable("Asset", { includeBlank: true }))}
+    </div>`;
+}
+
+function renderVendors() {
+  const withVendor = state.filtered.filter((r) => r.has_vendor);
+  $("#pageVendors").innerHTML = `
+    <div class="grid-2">
+      ${card("Top proveedores", "Solo registros con Vendor_Number informado.", bars(groupSum(withVendor, "Vendor_Name"), money.format, 15))}
+      ${card("Pedidos y SES", "Trazabilidad de compras y servicios cuando existe.", vendorPoTable(withVendor))}
+    </div>
+    <div style="margin-top:14px">${card(
+      "Facturas y documentos",
+      "Primeras líneas con proveedor informado.",
+      table(
+        [
+          { label: "Proveedor", key: "Vendor_Name" },
+          { label: "PO", key: "Po_Number" },
+          { label: "SES", key: "Ses_Number" },
+          { label: "Factura", key: "Invoice_Number" },
+          { label: "Documento", key: "Accounting_Document" },
+          { label: "Costo", num: true, render: (r) => money.format(amount(r)) },
+        ],
+        withVendor.sort((a, b) => amount(b) - amount(a)),
+        120,
+      ),
+    )}</div>`;
+}
+
+function vendorPoTable(rows) {
+  const grouped = groupSum(rows, "Po_Number").slice(0, 25);
+  return table(
+    [
+      { label: "PO", key: "label" },
+      { label: "Costo neto", num: true, render: (r) => money.format(r.value) },
+    ],
+    grouped,
+    25,
+  );
+}
+
+function renderQuality() {
+  const quality = state.meta.quality.map((q) => ({
+    ...q,
+    missingPct: state.meta.rows ? q.missing / state.meta.rows : 0,
+  }));
+  const rows = state.filtered;
+  const zeroRows = rows.filter((r) => amount(r) === 0).length;
+  const negativeRows = rows.filter((r) => amount(r) < 0).length;
+  $("#pageQuality").innerHTML = `
+    <div class="grid-3">
+      ${card("Completitud por campo", "Cobertura calculada sobre el dataset del Site.", bars(quality.map((q) => ({ label: q.field, value: q.coverage })), (v) => percent.format(v), 12))}
+      ${card("Riesgos de interpretación", "Campos críticos para análisis técnico.", table(
+        [
+          { label: "Campo", key: "field" },
+          { label: "Cobertura", num: true, render: (r) => percent.format(r.coverage) },
+          { label: "Faltantes", num: true, render: (r) => number.format(r.missing) },
+        ],
+        quality,
+        20,
+      ))}
+      ${card("Forma de los datos filtrados", "Reversos, ceros y corte temporal.", `<div class="chart">
+        <p><span class="badge warn">${number.format(negativeRows)}</span> registros negativos</p>
+        <p><span class="badge warn">${number.format(zeroRows)}</span> registros en cero</p>
+        <p><span class="badge">Posting ${state.meta.posting_min} a ${state.meta.posting_max}</span></p>
+        <p><span class="badge warn">Periodo ${state.meta.partial_period}</span> parcial</p>
+        <p><span class="badge">ETL máx. ${state.meta.etl_max}</span></p>
+      </div>`)}
+    </div>
+    <div style="margin-top:14px">${card("Registros de la vista", "Muestra filtrada para auditoría rápida.", detailRows(rows))}</div>`;
+}
+
+function detailRows(rows) {
+  return table(
+    [
+      { label: "Periodo", key: "Period_Number" },
+      { label: "Documento", key: "Accounting_Document" },
+      { label: "Línea", key: "Accounting_Document_Line" },
+      { label: "Centro costo", key: "Cost_Center_Name" },
+      { label: "Cuenta", key: "Account_Name" },
+      { label: "OT", render: (r) => (r.wo_valid ? escapeHtml(r.Wo_Number) : '<span class="badge warn">Sin OT</span>') },
+      { label: "Proveedor", key: "Vendor_Name" },
+      { label: "Costo", num: true, render: (r) => money.format(amount(r)) },
+    ],
+    rows.slice().sort((a, b) => Math.abs(amount(b)) - Math.abs(amount(a))),
+    150,
+  );
+}
+
+function renderPage() {
+  renderKpis();
+  renderExecutive();
+  renderStation();
+  renderAccount();
+  renderOrders();
+  renderTechnical();
+  renderVendors();
+  renderQuality();
+}
+
+function setPage(page) {
+  state.page = page;
+  document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.page === page));
+  document.querySelectorAll(".page").forEach((pageNode) => pageNode.classList.remove("active"));
+  const map = {
+    executive: "#pageExecutive",
+    station: "#pageStation",
+    account: "#pageAccount",
+    orders: "#pageOrders",
+    technical: "#pageTechnical",
+    vendors: "#pageVendors",
+    quality: "#pageQuality",
+  };
+  $(map[page]).classList.add("active");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function downloadCsv() {
+  const columns = [
+    "Fiscal_Year",
+    "Period_Number",
+    "Posting_Date",
+    "Accounting_Document",
+    "Accounting_Document_Line",
+    "Cost_Center",
+    "Cost_Center_Name",
+    "Account_Number",
+    "Account_Name",
+    "Functional_Area_Name",
+    "Amount_In_Usd",
+    "Wo_Number",
+    "Wo_Type",
+    "Wo_Activity_Type",
+    "Functional_Location",
+    "Vendor_Number",
+    "Vendor_Name",
+  ];
+  const lines = [columns.join(",")];
+  for (const row of state.filtered) {
+    lines.push(columns.map((col) => `"${String(row[col] ?? "").replace(/"/g, '""')}"`).join(","));
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "costos_mantenimiento_filtrado.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function bindEvents() {
+  $("#scopeFilter").addEventListener("change", (event) => {
+    state.filters.scope = event.target.value;
+    populateFilters();
+    applyFilters();
+    renderPage();
+  });
+
+  for (const [key, id] of Object.entries(ids)) {
+    if (key === "scope") continue;
+    const node = $(id);
+    node.addEventListener("change", (event) => {
+      state.filters[key] = event.target.value;
+      applyFilters();
+      renderPage();
+    });
+  }
+
+  $("#searchBox").addEventListener("input", (event) => {
+    state.filters.search = event.target.value;
+    applyFilters();
+    renderPage();
+  });
+
+  $("#resetFilters").addEventListener("click", () => {
+    for (const key of Object.keys(state.filters)) state.filters[key] = key === "scope" ? "strict" : "";
+    $("#scopeFilter").value = "strict";
+    $("#searchBox").value = "";
+    populateFilters();
+    for (const [key, id] of Object.entries(ids)) $(id).value = state.filters[key] || "";
+    applyFilters();
+    renderPage();
+  });
+
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.addEventListener("click", () => setPage(tab.dataset.page));
+  });
+
+  $("#downloadCsv").addEventListener("click", downloadCsv);
+}
+
+async function init() {
+  const payload = await loadCompressedData();
+  state.rows = payload.rows;
+  state.meta = payload.meta;
+  $("#sourceLine").textContent = `${state.meta.source} · hoja ${state.meta.source_sheet} · ${number.format(state.meta.rows)} líneas preparadas · posting ${state.meta.posting_min} a ${state.meta.posting_max}`;
+  populateFilters();
+  applyFilters();
+  bindEvents();
+  renderPage();
+  setPage("executive");
+  $("#loading").classList.add("hidden");
+}
+
+async function loadCompressedData() {
+  if (!("DecompressionStream" in window)) {
+    throw new Error("Este navegador no soporta lectura gzip local del dataset.");
+  }
+  const compressed = window.DASHBOARD_DATA_GZ_BASE64
+    ? base64ToArrayBuffer(window.DASHBOARD_DATA_GZ_BASE64)
+    : await fetch("./data/dashboard-data.json.gz").then((response) => response.arrayBuffer());
+  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const text = await new Response(stream).text();
+  return JSON.parse(text);
+}
+
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+init().catch((error) => {
+  console.error(error);
+  $("#loading").textContent = "No se pudo cargar el dashboard.";
+});
