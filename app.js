@@ -704,16 +704,24 @@ async function init() {
 }
 
 async function loadCompressedData() {
+  let compressed;
   try {
-    if ("DecompressionStream" in window) {
-      const compressed = window.DASHBOARD_DATA_GZ_BASE64
+    compressed = window.DASHBOARD_DATA_GZ_BASE64
         ? base64ToArrayBuffer(window.DASHBOARD_DATA_GZ_BASE64)
         : await fetch("./data/dashboard-data.json.gz").then((response) => response.arrayBuffer());
+    if ("DecompressionStream" in window) {
       const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
       return JSON.parse(await new Response(stream).text());
     }
   } catch (error) {
-    console.warn("No se pudo leer el snapshot comprimido; se intenta el respaldo JSON.", error);
+    console.warn("No se pudo leer el snapshot con DecompressionStream; se intenta pako.", error);
+  }
+  try {
+    if (compressed && window.pako) {
+      return JSON.parse(new TextDecoder().decode(window.pako.ungzip(new Uint8Array(compressed))));
+    }
+  } catch (error) {
+    console.warn("No se pudo leer el snapshot con pako; se intenta el respaldo JSON.", error);
   }
   const response = await fetch("./data/dashboard-data.json", { cache: "no-store" });
   if (!response.ok) throw new Error(`No se pudo cargar el respaldo de datos (${response.status}).`);
