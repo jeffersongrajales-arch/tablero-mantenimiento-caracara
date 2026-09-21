@@ -249,12 +249,12 @@ function renderKpis() {
   const kpis = [
     ["Costo neto", money.format(m.net), "Suma de Amount_In_Usd"],
     ["Costo positivo", money.format(m.positive), "Debitos y cargos positivos"],
-    ["Créditos / reversos", money.format(m.negative), "Valores negativos del periodo"],
-    ["Registros", number.format(m.rows), "Líneas contables filtradas"],
-    ["Con OT válida", percent.format(m.woPct), "Wo_Number distinto de 0"],
+    ["CrÃ©ditos / reversos", money.format(m.negative), "Valores negativos del periodo"],
+    ["Registros", number.format(m.rows), "LÃ­neas contables filtradas"],
+    ["Con OT vÃ¡lida", percent.format(m.woPct), "Wo_Number distinto de 0"],
     ["Con proveedor", percent.format(m.vendorPct), "Vendor_Number informado"],
-    ["Con ubicación técnica", percent.format(m.flocPct), "Functional_Location informado"],
-    ["Costo sin OT válida", money.format(m.noWoCost), "Brecha de trazabilidad"],
+    ["Con ubicaciÃ³n tÃ©cnica", percent.format(m.flocPct), "Functional_Location informado"],
+    ["Costo sin OT vÃ¡lida", money.format(m.noWoCost), "Brecha de trazabilidad"],
   ];
   const grid = $("#kpiGrid");
   grid.innerHTML = "";
@@ -298,7 +298,7 @@ function lineChart(monthRows) {
   });
   const path = points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${p.y}`).join(" ");
   const zeroY = height - pad - ((0 - min) / (max - min || 1)) * (height - pad * 2);
-  return `<div class="chart"><svg class="svg-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Evolución mensual">
+  return `<div class="chart"><svg class="svg-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="EvoluciÃ³n mensual">
     <line x1="${pad}" x2="${width - pad}" y1="${zeroY}" y2="${zeroY}" stroke="#d9e3e8" stroke-width="2" />
     <path d="${path}" fill="none" stroke="#14718a" stroke-width="4" stroke-linecap="round" />
     ${points
@@ -335,7 +335,7 @@ function topTable(key, extra = {}) {
     [
       { label: "Elemento", key: "label" },
       { label: "Costo neto", num: true, render: (r) => money.format(r.value) },
-      { label: "Participación", num: true, render: (r) => percent.format(r.value / total) },
+      { label: "ParticipaciÃ³n", num: true, render: (r) => percent.format(r.value / total) },
     ],
     data,
     20,
@@ -347,13 +347,13 @@ function renderExecutive() {
   for (const row of state.filtered) byMonth.set(row.Period_Number, (byMonth.get(row.Period_Number) || 0) + amount(row));
   const html = `
     <div class="grid-2">
-      ${card("Evolución mensual", "Costo neto por periodo fiscal. Septiembre es parcial.", lineChart(byMonth))}
-      ${card("Pareto por centro de costo", "Concentración de la ejecución financiera.", bars(groupSum(state.filtered, "Cost_Center_Name")))}
+      ${card("EvoluciÃ³n mensual", "Costo neto por periodo fiscal. Septiembre es parcial.", lineChart(byMonth))}
+      ${card("Pareto por centro de costo", "ConcentraciÃ³n de la ejecuciÃ³n financiera.", bars(groupSum(state.filtered, "Cost_Center_Name")))}
     </div>
     <div class="grid-3" style="margin-top:14px">
-      ${card("Costo por área funcional", "Naturaleza financiera del gasto.", bars(groupSum(state.filtered, "Functional_Area_Name"), money.format, 10))}
+      ${card("Costo por Ã¡rea funcional", "Naturaleza financiera del gasto.", bars(groupSum(state.filtered, "Functional_Area_Name"), money.format, 10))}
       ${card("Costo por cuenta", "Cuentas contables con mayor peso.", bars(groupSum(state.filtered, "Account_Name"), money.format, 10))}
-      ${card("Alertas de trazabilidad", "Cobertura de campos críticos.", qualityBadges())}
+      ${card("Alertas de trazabilidad", "Cobertura de campos crÃ­ticos.", qualityBadges())}
     </div>`;
   $("#pageExecutive").innerHTML = html;
 }
@@ -361,11 +361,11 @@ function renderExecutive() {
 function qualityBadges() {
   const m = metrics(state.filtered);
   return `<div class="chart">
-    <p><span class="badge ${m.woPct >= 0.8 ? "good" : "warn"}">${percent.format(m.woPct)}</span> con OT válida</p>
-    <p><span class="badge ${m.flocPct >= 0.8 ? "good" : "warn"}">${percent.format(m.flocPct)}</span> con ubicación técnica</p>
+    <p><span class="badge ${m.woPct >= 0.8 ? "good" : "warn"}">${percent.format(m.woPct)}</span> con OT vÃ¡lida</p>
+    <p><span class="badge ${m.flocPct >= 0.8 ? "good" : "warn"}">${percent.format(m.flocPct)}</span> con ubicaciÃ³n tÃ©cnica</p>
     <p><span class="badge ${m.vendorPct >= 0.6 ? "good" : "warn"}">${percent.format(m.vendorPct)}</span> con proveedor</p>
-    <p><span class="badge warn">${money.format(m.noWoCost)}</span> costo sin OT válida</p>
-    <p><span class="badge warn">${percent.format(m.top20Share)}</span> concentración Top 20 centro de costo</p>
+    <p><span class="badge warn">${money.format(m.noWoCost)}</span> costo sin OT vÃ¡lida</p>
+    <p><span class="badge warn">${percent.format(m.top20Share)}</span> concentraciÃ³n Top 20 centro de costo</p>
   </div>`;
 }
 
@@ -384,7 +384,7 @@ function renderStation() {
   $("#pageStation").innerHTML = `
     <div class="grid-2">
       ${card("Ranking de centros de costo", "Costo neto por centro de costo.", bars(grouped, money.format, 15))}
-      ${card("Profit center", "Distribución gerencial por profit center.", bars(groupSum(state.filtered, "Profit_Center_Name"), money.format, 15))}
+      ${card("Profit center", "DistribuciÃ³n gerencial por profit center.", bars(groupSum(state.filtered, "Profit_Center_Name"), money.format, 15))}
     </div>
     <div style="margin-top:14px">${card(
       "Detalle por centro de costo",
@@ -394,7 +394,7 @@ function renderStation() {
           { label: "Centro de costo", key: "label" },
           { label: "Costo neto", num: true, render: (r) => money.format(r.value) },
           { label: "Registros", num: true, render: (r) => number.format(r.rows) },
-          { label: "% OT válida", num: true, render: (r) => percent.format(r.wo) },
+          { label: "% OT vÃ¡lida", num: true, render: (r) => percent.format(r.wo) },
           { label: "% proveedor", num: true, render: (r) => percent.format(r.vendor) },
         ],
         rows,
@@ -406,12 +406,12 @@ function renderStation() {
 function renderAccount() {
   $("#pageAccount").innerHTML = `
     <div class="grid-2">
-      ${card("Área funcional", "Clasificación financiera principal.", bars(groupSum(state.filtered, "Functional_Area_Name"), money.format, 14))}
+      ${card("Ãrea funcional", "ClasificaciÃ³n financiera principal.", bars(groupSum(state.filtered, "Functional_Area_Name"), money.format, 14))}
       ${card("Cuenta contable", "Pareto de cuentas.", bars(groupSum(state.filtered, "Account_Name"), money.format, 14))}
     </div>
     <div class="grid-2" style="margin-top:14px">
       ${card("Nivel financiero", "Vista por Level 3.", topTable("Level 3 (Summ FS)"))}
-      ${card("Departamento / actividad", "Clasificación auxiliar cuando existe.", topTable("Department", { includeBlank: true }))}
+      ${card("Departamento / actividad", "ClasificaciÃ³n auxiliar cuando existe.", topTable("Department", { includeBlank: true }))}
     </div>`;
 }
 
@@ -420,12 +420,12 @@ function renderOrders() {
   const invalidCost = sum(state.filtered.filter((r) => !r.wo_valid));
   $("#pageOrders").innerHTML = `
     <div class="grid-3">
-      ${card("Top 20 OT válidas", "Wo_Number = 0 está excluido.", topTable("Wo_Number", { validOnly: true }))}
+      ${card("Top 20 OT vÃ¡lidas", "Wo_Number = 0 estÃ¡ excluido.", topTable("Wo_Number", { validOnly: true }))}
       ${card("Tipo de OT", "Solo filas con tipo informado.", bars(groupSum(validRows, "Wo_Type"), money.format, 12))}
       ${card("Actividad de OT", "Preventivo, correctivo, predictivo u otros.", bars(groupSum(validRows, "Wo_Activity_Type"), money.format, 12))}
     </div>
     <div class="grid-2" style="margin-top:14px">
-      ${card("Costo sin OT válida", "Debe tratarse como brecha de trazabilidad.", `<div class="chart"><div class="kpi"><span>Costo sin OT válida</span><strong>${money.format(invalidCost)}</strong><small>No incluir en ranking de OT</small></div></div>`)}
+      ${card("Costo sin OT vÃ¡lida", "Debe tratarse como brecha de trazabilidad.", `<div class="chart"><div class="kpi"><span>Costo sin OT vÃ¡lida</span><strong>${money.format(invalidCost)}</strong><small>No incluir en ranking de OT</small></div></div>`)}
       ${card("Detalle OT", "Primeras 80 OT por costo neto.", orderDetail(validRows))}
     </div>`;
 }
@@ -439,10 +439,10 @@ function orderDetail(rows) {
   return table(
     [
       { label: "OT", key: "label" },
-      { label: "Descripción", key: "desc" },
+      { label: "DescripciÃ³n", key: "desc" },
       { label: "Tipo", key: "type" },
       { label: "Actividad", key: "activity" },
-      { label: "Ubicación", key: "floc" },
+      { label: "UbicaciÃ³n", key: "floc" },
       { label: "Costo neto", num: true, render: (r) => money.format(r.value) },
     ],
     details,
@@ -454,8 +454,8 @@ function renderTechnical() {
   const withFloc = state.filtered.filter((r) => r.has_floc);
   $("#pageTechnical").innerHTML = `
     <div class="grid-2">
-      ${card("Top ubicaciones técnicas", "Costo neto solo donde existe Functional_Location.", topTable("Functional_Location"))}
-      ${card("Sistemas", "Cobertura limitada; requiere IH01 para tablero técnico completo.", bars(groupSum(withFloc, "Floc_System_Level4", { includeBlank: true }), money.format, 14))}
+      ${card("Top ubicaciones tÃ©cnicas", "Costo neto solo donde existe Functional_Location.", topTable("Functional_Location"))}
+      ${card("Sistemas", "Cobertura limitada; requiere IH01 para tablero tÃ©cnico completo.", bars(groupSum(withFloc, "Floc_System_Level4", { includeBlank: true }), money.format, 14))}
     </div>
     <div class="grid-2" style="margin-top:14px">
       ${card("Segmentos / subsistemas", "Campo auxiliar con baja cobertura.", bars(groupSum(withFloc, "Floc_Segment_Level3", { includeBlank: true }), money.format, 14))}
@@ -472,7 +472,7 @@ function renderVendors() {
     </div>
     <div style="margin-top:14px">${card(
       "Facturas y documentos",
-      "Primeras líneas con proveedor informado.",
+      "Primeras lÃ­neas con proveedor informado.",
       table(
         [
           { label: "Proveedor", key: "Vendor_Name" },
@@ -511,7 +511,7 @@ function renderQuality() {
   $("#pageQuality").innerHTML = `
     <div class="grid-3">
       ${card("Completitud por campo", "Cobertura calculada sobre el dataset del Site.", bars(quality.map((q) => ({ label: q.field, value: q.coverage })), (v) => percent.format(v), 12))}
-      ${card("Riesgos de interpretación", "Campos críticos para análisis técnico.", table(
+      ${card("Riesgos de interpretaciÃ³n", "Campos crÃ­ticos para anÃ¡lisis tÃ©cnico.", table(
         [
           { label: "Campo", key: "field" },
           { label: "Cobertura", num: true, render: (r) => percent.format(r.coverage) },
@@ -525,10 +525,10 @@ function renderQuality() {
         <p><span class="badge warn">${number.format(zeroRows)}</span> registros en cero</p>
         <p><span class="badge">Posting ${state.meta.posting_min} a ${state.meta.posting_max}</span></p>
         <p><span class="badge warn">Periodo ${state.meta.partial_period}</span> parcial</p>
-        <p><span class="badge">ETL máx. ${state.meta.etl_max}</span></p>
+        <p><span class="badge">ETL mÃ¡x. ${state.meta.etl_max}</span></p>
       </div>`)}
     </div>
-    <div style="margin-top:14px">${card("Registros de la vista", "Muestra filtrada para auditoría rápida.", detailRows(rows))}</div>`;
+    <div style="margin-top:14px">${card("Registros de la vista", "Muestra filtrada para auditorÃ­a rÃ¡pida.", detailRows(rows))}</div>`;
 }
 
 function detailRows(rows) {
@@ -536,7 +536,7 @@ function detailRows(rows) {
     [
       { label: "Periodo", key: "Period_Number" },
       { label: "Documento", key: "Accounting_Document" },
-      { label: "Línea", key: "Accounting_Document_Line" },
+      { label: "LÃ­nea", key: "Accounting_Document_Line" },
       { label: "Centro costo", key: "Cost_Center_Name" },
       { label: "Cuenta", key: "Account_Name" },
       { label: "OT", render: (r) => (r.wo_valid ? escapeHtml(r.Wo_Number) : '<span class="badge warn">Sin OT</span>') },
@@ -669,11 +669,11 @@ function bindEvents() {
       for (const key of Object.keys(state.filters)) state.filters[key] = key === "scope" ? "strict" : "";
       $("#scopeFilter").value = "strict";
       $("#searchBox").value = "";
-      $("#sourceLine").textContent = `${state.meta.source} · hoja Data · ${number.format(state.meta.rows)} líneas preparadas · posting ${state.meta.posting_min} a ${state.meta.posting_max}`;
+      $("#sourceLine").textContent = `${state.meta.source} Â· hoja Data Â· ${number.format(state.meta.rows)} lÃ­neas preparadas Â· posting ${state.meta.posting_min} a ${state.meta.posting_max}`;
       populateFilters();
       applyFilters();
       renderPage();
-      status.textContent = `Archivo cargado: ${file.name} (${number.format(state.rows.length)} líneas de mantenimiento).`;
+      status.textContent = `Archivo cargado: ${file.name} (${number.format(state.rows.length)} lÃ­neas de mantenimiento).`;
       status.className = "file-status success-text";
     } catch (error) {
       console.error(error);
@@ -689,7 +689,7 @@ async function init() {
     const payload = await loadCompressedData();
     state.rows = payload.rows;
     state.meta = payload.meta;
-    $("#sourceLine").textContent = `${state.meta.source} · hoja ${state.meta.source_sheet} · ${number.format(state.meta.rows)} líneas preparadas · posting ${state.meta.posting_min} a ${state.meta.posting_max}`;
+    $("#sourceLine").textContent = `${state.meta.source} Â· hoja ${state.meta.source_sheet} Â· ${number.format(state.meta.rows)} lÃ­neas preparadas Â· posting ${state.meta.posting_min} a ${state.meta.posting_max}`;
     populateFilters();
     applyFilters();
     renderPage();
@@ -698,7 +698,7 @@ async function init() {
   } catch (error) {
     console.error(error);
     $("#loading").textContent = "Seleccione un archivo XLSX para iniciar el dashboard.";
-    $("#fileStatus").textContent = "No se pudo cargar el snapshot. Puedes cargar el archivo ODS SAP desde aquí.";
+    $("#fileStatus").textContent = "No se pudo cargar el snapshot. Puedes cargar el archivo ODS SAP desde aquÃ­.";
     $("#fileStatus").className = "file-status error-text";
   }
 }
@@ -708,7 +708,7 @@ async function loadCompressedData() {
   try {
     compressed = window.DASHBOARD_DATA_GZ_BASE64
         ? base64ToArrayBuffer(window.DASHBOARD_DATA_GZ_BASE64)
-        : await fetch("./data/dashboard-data.json.gz").then((response) => response.arrayBuffer());
+        : await fetch("./data.json").then((response) => response.arrayBuffer());
     if ("DecompressionStream" in window) {
       const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
       return JSON.parse(await new Response(stream).text());
@@ -723,13 +723,13 @@ async function loadCompressedData() {
   } catch (error) {
     console.warn("No se pudo leer el snapshot con pako; se intenta el respaldo JSON.", error);
   }
-  const response = await fetch("./data/dashboard-data.json", { cache: "no-store" });
+  const response = await fetch("./data.json", { cache: "no-store" });
   if (!response.ok) throw new Error(`No se pudo cargar el respaldo de datos (${response.status}).`);
   return response.json();
 }
 
 async function loadUploadedFile(file) {
-  if (!window.XLSX) throw new Error("No se pudo cargar el lector XLSX. Verifique la conexión y vuelva a intentar.");
+  if (!window.XLSX) throw new Error("No se pudo cargar el lector XLSX. Verifique la conexiÃ³n y vuelva a intentar.");
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true, raw: true });
   if (!workbook.SheetNames.includes("Data")) throw new Error("El archivo no contiene una hoja llamada Data.");
@@ -751,3 +751,5 @@ init().catch((error) => {
   console.error(error);
   $("#loading").textContent = "No se pudo cargar el dashboard.";
 });
+
+
