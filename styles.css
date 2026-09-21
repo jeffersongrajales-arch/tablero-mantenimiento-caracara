@@ -517,3 +517,17 @@ th.num {
     text-align: left;
   }
 }
+
+.scope-toggle { display:flex; gap:4px; padding:4px; background:#eef3f6; border:1px solid #d5e0e6; border-radius:8px; }
+.scope-button { background:transparent; color:#35566b; padding:9px 11px; border-radius:6px; font-size:.78rem; font-weight:700; white-space:nowrap; }
+.scope-button.active { background:#0d4e63; color:#fff; box-shadow:0 2px 5px #102a4330; }
+.scope-button:hover:not(.active) { background:#dcecf0; }
+.topbar-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; }
+.topbar-actions > button { background:#fff; color:#123e53; border:1px solid #cbd8df; padding:10px 12px; border-radius:6px; font-weight:700; font-size:.78rem; }
+.topbar-actions > button:hover { background:#edf7f8; }
+.point-value { font-weight:700; paint-order:stroke; stroke:#fff; stroke-width:3px; stroke-linejoin:round; }
+.criteria-copy { color:#496174; line-height:1.65; font-size:.92rem; }
+.criteria-copy p + p { margin-top:12px; }
+.criteria-copy code { color:#0d4e63; background:#eef6f8; padding:2px 4px; border-radius:3px; }
+.method-warning { border-left:4px solid #c58b31; background:#fff8e9; color:#6b4b1d; padding:10px 12px; }
+@media (max-width: 900px) { .topbar-actions { justify-content:flex-start; } .scope-toggle { width:100%; } .scope-button { flex:1; white-space:normal; } }

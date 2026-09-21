@@ -79,6 +79,11 @@
             <p id="sourceLine" class="source-line">Cargando fuente...</p>
           </div>
           <div class="topbar-actions">
+            <div class="scope-toggle" role="group" aria-label="Población del tablero">
+              <button id="allExpensesToggle" type="button" class="scope-button">Todos los gastos cargados</button>
+              <button id="maintenanceToggle" type="button" class="scope-button active">Solo costos de mantenimiento</button>
+            </div>
+            <button id="criteriaButton" type="button">Criterios de clasificación</button>
             <button id="downloadCsv" type="button">Exportar vista CSV</button>
           </div>
         </header>
@@ -112,6 +117,16 @@
     </div>
 
     <div id="loading" class="loading">Preparando dashboard...</div>
+    <dialog id="criteriaDialog">
+      <div class="dialog-heading"><div><p class="eyebrow">Método de clasificación</p><h2>Criterios de clasificación de costos</h2></div><button id="closeCriteria" type="button">Cerrar</button></div>
+      <div class="criteria-copy">
+        <p><strong>Criterio financiero estricto:</strong> se incluyen las filas con <code>Level 3 (Summ FS) = Maintenance costs</code>.</p>
+        <p><strong>Criterio ampliado:</strong> también se consideran las áreas funcionales <code>Repairs &amp; Maintenance</code>, <code>Preventative Maintenance</code>, <code>General Maintenance</code> y <code>Downhole Well Maintenance</code>.</p>
+        <p><strong>OT:</strong> <code>Wo_Number = 0</code> se trata como OT no válida y se mantiene visible como brecha de trazabilidad; no se usa para afirmar ejecución.</p>
+        <p><strong>Cobertura:</strong> proveedor, ubicación técnica, sistema y equipo solo se interpretan cuando los campos tienen datos suficientes.</p>
+        <p class="method-warning"><strong>Límite:</strong> esta clasificación es financiera-contable. No demuestra ejecución física, cierre técnico, cumplimiento del plan ni confiabilidad del activo.</p>
+      </div>
+    </dialog>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
     <script src="./data.js"></script>
