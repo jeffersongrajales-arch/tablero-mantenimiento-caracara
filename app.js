@@ -648,7 +648,8 @@ function syncScopeControls() {
     strict: "costos de mantenimiento — criterio financiero estricto",
     expanded: "costos de mantenimiento — criterio ampliado",
   };
-  const filteredCount = state.rows.length ? ` · ${number.format(state.filtered.length)} registros en la vista actual` : "";
+  const recordLabel = state.filtered.length === 1 ? "registro" : "registros";
+  const filteredCount = state.rows.length ? ` · ${number.format(state.filtered.length)} ${recordLabel} en la vista actual` : "";
   $("#populationStatus").textContent = `Universo: ${labels[scope]}${filteredCount}.`;
 }
 
@@ -755,17 +756,19 @@ function bindEvents() {
     status.textContent = "Leyendo hoja Data...";
     status.className = "file-status loading-text";
     try {
-      const payload = await loadUploadedFile(file);
+      const payload = await loadUploadedFile(file, (message) => {
+        status.textContent = message;
+      });
       state.rows = payload.rows;
       state.meta = payload.meta;
       for (const key of Object.keys(state.filters)) state.filters[key] = key === "scope" ? "strict" : "";
       state.maintenanceScope = "strict";
       $("#searchBox").value = "";
-      $("#sourceLine").textContent = `${state.meta.source} · hoja Data · ${number.format(state.meta.rows)} líneas preparadas · contabilización ${state.meta.posting_min} a ${state.meta.posting_max}`;
+      $("#sourceLine").textContent = `${state.meta.source} · hoja Data · ${number.format(state.meta.rows)} líneas de CARACARA preparadas · contabilización ${state.meta.posting_min} a ${state.meta.posting_max}`;
       populateFilters();
       applyFilters();
       renderPage();
-      status.textContent = `Archivo cargado: ${file.name} (${number.format(state.rows.length)} líneas totales). Vista inicial: mantenimiento financiero estricto.`;
+      status.textContent = `Archivo cargado: ${file.name}. ${number.format(state.rows.length)} líneas de CARACARA preparadas de ${number.format(payload.sourceRows)} líneas fuente. Vista inicial: mantenimiento financiero estricto.`;
       status.className = "file-status success-text";
     } catch (error) {
       console.error(error);
@@ -823,16 +826,46 @@ async function loadCompressedData() {
   return response.json();
 }
 
-async function loadUploadedFile(file) {
-  if (!window.XLSX) throw new Error("No se pudo cargar el lector XLSX. Verifique la conexión y vuelva a intentar.");
+async function loadUploadedFile(file, onProgress = () => {}) {
+  if (!window.XLSX || !window.ODSParser) {
+    throw new Error("No se pudo iniciar el lector XLSX. Recargue la página y vuelva a intentar.");
+  }
+  onProgress("Cargando el archivo en memoria...");
   const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array", cellDates: true, raw: true });
-  if (!workbook.SheetNames.includes("Data")) throw new Error("El archivo no contiene una hoja llamada Data.");
-  const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets.Data, { defval: "", raw: true });
-  if (!rawRows.length) throw new Error("La hoja Data no contiene registros.");
-  const rows = normalizeUploadedRows(rawRows);
+  let parsed;
+  if ("Worker" in window) {
+    parsed = await parseUploadedFileInWorker(buffer, onProgress);
+  } else {
+    onProgress("Analizando la estructura del archivo...");
+    parsed = window.ODSParser.parseWorkbook(buffer, { profitCenter: "CARACARA" });
+  }
+  const rows = normalizeUploadedRows(parsed.rows);
   if (!rows.length) throw new Error("No se encontraron registros válidos en la hoja Data.");
-  return { rows, meta: buildUploadedMeta(rows, file.name) };
+  return {
+    rows,
+    meta: buildUploadedMeta(rows, file.name),
+    sourceRows: parsed.sourceRows,
+  };
+}
+
+function parseUploadedFileInWorker(buffer, onProgress) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker("./ods-worker.js?v=20260921-upload");
+    worker.addEventListener("message", (event) => {
+      if (event.data.type === "progress") {
+        onProgress(event.data.message);
+        return;
+      }
+      worker.terminate();
+      if (event.data.type === "success") resolve(event.data.payload);
+      else reject(new Error(event.data.message || "No se pudo procesar el archivo XLSX."));
+    });
+    worker.addEventListener("error", () => {
+      worker.terminate();
+      reject(new Error("El lector XLSX no pudo iniciar. Recargue la página y vuelva a intentar."));
+    });
+    worker.postMessage({ buffer, profitCenter: "CARACARA" }, [buffer]);
+  });
 }
 
 function base64ToArrayBuffer(base64) {

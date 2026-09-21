@@ -8,7 +8,7 @@
       name="description"
       content="Tablero gerencial privado de costos de mantenimiento basado en ODS SAP 2026."
     />
-    <link rel="stylesheet" href="./styles.css?v=20260921-controls" />
+    <link rel="stylesheet" href="./styles.css?v=20260921-upload" />
   </head>
   <body>
     <div class="app-shell">
@@ -133,9 +133,10 @@
         <p class="method-warning"><strong>Límite:</strong> esta clasificación es financiera-contable. No demuestra ejecución física, cierre técnico, cumplimiento del plan ni confiabilidad del activo.</p>
       </div>
     </dialog>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-    <script src="./data.js?v=20260921-controls"></script>
-    <script src="./app.js?v=20260921-controls"></script>
+    <script src="./vendor/xlsx.full.min.js"></script>
+    <script src="./vendor/pako.min.js"></script>
+    <script src="./ods-parser.js?v=20260921-upload"></script>
+    <script src="./data.js?v=20260921-upload"></script>
+    <script src="./app.js?v=20260921-upload"></script>
   </body>
 </html>
