@@ -3,6 +3,7 @@ const state = {
   filtered: [],
   meta: null,
   page: "executive",
+  maintenanceScope: "strict",
   filters: {
     scope: "strict",
     Fiscal_Year: "",
@@ -111,7 +112,7 @@ function buildUploadedMeta(rows, fileName) {
   return {
     source: fileName,
     source_sheet: "Data",
-    grain: "Linea de documento contable SAP",
+    grain: "Línea de documento contable SAP",
     generated_at: new Date().toISOString().slice(0, 16).replace("T", " "),
     rows: rows.length,
     strict_rows: rows.filter(isStrict).length,
@@ -224,6 +225,9 @@ function populateFilters() {
   optionize($(ids.Vendor_Name), uniq(scoped, "Vendor_Name"), "Todos");
   optionize($(ids.Functional_Location), uniq(scoped, "Functional_Location"), "Todas");
   optionize($(ids.Gross_Indicator), uniq(scoped, "Gross_Indicator"), "Todos");
+  for (const [key, id] of Object.entries(ids)) {
+    if (key !== "scope") state.filters[key] = $(id).value;
+  }
 }
 
 function applyFilters() {
@@ -256,8 +260,8 @@ function renderKpis() {
   const m = metrics(state.filtered);
   const kpis = [
     ["Costo neto", money.format(m.net), "Suma de Amount_In_Usd"],
-    ["Costo positivo", money.format(m.positive), "Debitos y cargos positivos"],
-    ["Créditos / reversos", money.format(m.negative), "Valores negativos del periodo"],
+    ["Costo positivo", money.format(m.positive), "Débitos y cargos positivos"],
+    ["Créditos / reversos", money.format(m.negative), "Valores negativos del período"],
     ["Registros", number.format(m.rows), "Líneas contables filtradas"],
     ["Con OT válida", percent.format(m.woPct), "Wo_Number distinto de 0"],
     ["Con proveedor", percent.format(m.vendorPct), "Vendor_Number informado"],
@@ -356,7 +360,7 @@ function renderExecutive() {
   for (const row of state.filtered) byMonth.set(row.Period_Number, (byMonth.get(row.Period_Number) || 0) + amount(row));
   const html = `
     <div class="grid-2">
-      ${card("Evolución mensual", "Costo neto por periodo fiscal. Septiembre es parcial.", lineChart(byMonth))}
+      ${card("Evolución mensual", "Costo neto por período fiscal. Septiembre es parcial.", lineChart(byMonth))}
       ${card("Pareto por centro de costo", "Concentración de la ejecución financiera.", bars(groupSum(state.filtered, "Cost_Center_Name")))}
     </div>
     <div class="grid-3" style="margin-top:14px">
@@ -393,7 +397,7 @@ function renderStation() {
   $("#pageStation").innerHTML = `
     <div class="grid-2">
       ${card("Ranking de centros de costo", "Costo neto por centro de costo.", bars(grouped, money.format, 15))}
-      ${card("Profit center", "Distribución gerencial por profit center.", bars(groupSum(state.filtered, "Profit_Center_Name"), money.format, 15))}
+      ${card("Centro de beneficio", "Distribución gerencial por centro de beneficio.", bars(groupSum(state.filtered, "Profit_Center_Name"), money.format, 15))}
     </div>
     <div style="margin-top:14px">${card(
       "Detalle por centro de costo",
@@ -468,7 +472,7 @@ function renderTechnical() {
     </div>
     <div class="grid-2" style="margin-top:14px">
       ${card("Segmentos / subsistemas", "Campo auxiliar con baja cobertura.", bars(groupSum(withFloc, "Floc_Segment_Level3", { includeBlank: true }), money.format, 14))}
-      ${card("Activos", "Asset no equivale a equipo SAP individual.", topTable("Asset", { includeBlank: true }))}
+      ${card("Activos", "El campo Asset no equivale a un equipo SAP individual.", topTable("Asset", { includeBlank: true }))}
     </div>`;
 }
 
@@ -519,7 +523,7 @@ function renderQuality() {
   const negativeRows = rows.filter((r) => amount(r) < 0).length;
   $("#pageQuality").innerHTML = `
     <div class="grid-3">
-      ${card("Completitud por campo", "Cobertura calculada sobre el dataset del Site.", bars(quality.map((q) => ({ label: q.field, value: q.coverage })), (v) => percent.format(v), 12))}
+      ${card("Completitud por campo", "Cobertura calculada sobre el conjunto de datos del tablero.", bars(quality.map((q) => ({ label: q.field, value: q.coverage })), (v) => percent.format(v), 12))}
       ${card("Riesgos de interpretación", "Campos críticos para análisis técnico.", table(
         [
           { label: "Campo", key: "field" },
@@ -532,8 +536,8 @@ function renderQuality() {
       ${card("Forma de los datos filtrados", "Reversos, ceros y corte temporal.", `<div class="chart">
         <p><span class="badge warn">${number.format(negativeRows)}</span> registros negativos</p>
         <p><span class="badge warn">${number.format(zeroRows)}</span> registros en cero</p>
-        <p><span class="badge">Posting ${state.meta.posting_min} a ${state.meta.posting_max}</span></p>
-        <p><span class="badge warn">Periodo ${state.meta.partial_period}</span> parcial</p>
+        <p><span class="badge">Contabilización ${state.meta.posting_min} a ${state.meta.posting_max}</span></p>
+        <p><span class="badge warn">Período ${state.meta.partial_period}</span> parcial</p>
         <p><span class="badge">ETL máx. ${state.meta.etl_max}</span></p>
       </div>`)}
     </div>
@@ -543,10 +547,10 @@ function renderQuality() {
 function detailRows(rows) {
   return table(
     [
-      { label: "Periodo", key: "Period_Number" },
+      { label: "Período", key: "Period_Number" },
       { label: "Documento", key: "Accounting_Document" },
       { label: "Línea", key: "Accounting_Document_Line" },
-      { label: "Centro costo", key: "Cost_Center_Name" },
+      { label: "Centro de costo", key: "Cost_Center_Name" },
       { label: "Cuenta", key: "Account_Name" },
       { label: "OT", render: (r) => (r.wo_valid ? escapeHtml(r.Wo_Number) : '<span class="badge warn">Sin OT</span>') },
       { label: "Proveedor", key: "Vendor_Name" },
@@ -558,6 +562,7 @@ function detailRows(rows) {
 }
 
 function renderPage() {
+  syncScopeControls();
   renderKpis();
   renderExecutive();
   renderStation();
@@ -625,12 +630,58 @@ function downloadCsv() {
   URL.revokeObjectURL(url);
 }
 
+function syncScopeControls() {
+  const scope = state.filters.scope;
+  const allSelected = scope === "all";
+  const scopeFilter = $("#scopeFilter");
+  const allButton = $("#allExpensesToggle");
+  const maintenanceButton = $("#maintenanceToggle");
+
+  scopeFilter.value = scope;
+  allButton.classList.toggle("active", allSelected);
+  maintenanceButton.classList.toggle("active", !allSelected);
+  allButton.setAttribute("aria-pressed", String(allSelected));
+  maintenanceButton.setAttribute("aria-pressed", String(!allSelected));
+
+  const labels = {
+    all: "todos los gastos cargados",
+    strict: "costos de mantenimiento — criterio financiero estricto",
+    expanded: "costos de mantenimiento — criterio ampliado",
+  };
+  const filteredCount = state.rows.length ? ` · ${number.format(state.filtered.length)} registros en la vista actual` : "";
+  $("#populationStatus").textContent = `Universo: ${labels[scope]}${filteredCount}.`;
+}
+
+function setScope(scope) {
+  if (!["all", "strict", "expanded"].includes(scope)) return;
+  if (scope !== "all") state.maintenanceScope = scope;
+  state.filters.scope = scope;
+  populateFilters();
+  applyFilters();
+  syncScopeControls();
+  renderPage();
+}
+
+function openCriteriaDialog(dialog) {
+  if (typeof dialog.showModal === "function") {
+    if (!dialog.open) dialog.showModal();
+    return;
+  }
+  dialog.setAttribute("open", "");
+  dialog.classList.add("dialog-fallback-open");
+  document.body.classList.add("dialog-open");
+}
+
+function closeCriteriaDialog(dialog) {
+  if (typeof dialog.close === "function" && dialog.open) dialog.close();
+  else dialog.removeAttribute("open");
+  dialog.classList.remove("dialog-fallback-open");
+  document.body.classList.remove("dialog-open");
+}
+
 function bindEvents() {
   $("#scopeFilter").addEventListener("change", (event) => {
-    state.filters.scope = event.target.value;
-    populateFilters();
-    applyFilters();
-    renderPage();
+    setScope(event.target.value);
   });
 
   for (const [key, id] of Object.entries(ids)) {
@@ -651,11 +702,12 @@ function bindEvents() {
 
   $("#resetFilters").addEventListener("click", () => {
     for (const key of Object.keys(state.filters)) state.filters[key] = key === "scope" ? "strict" : "";
-    $("#scopeFilter").value = "strict";
+    state.maintenanceScope = "strict";
     $("#searchBox").value = "";
     populateFilters();
     for (const [key, id] of Object.entries(ids)) $(id).value = state.filters[key] || "";
     applyFilters();
+    syncScopeControls();
     renderPage();
   });
 
@@ -665,21 +717,18 @@ function bindEvents() {
 
   $("#downloadCsv").addEventListener("click", downloadCsv);
 
-  const setPopulation = (scope) => {
-    state.filters.scope = scope;
-    $("#scopeFilter").value = scope === "all" ? "strict" : scope;
-    document.querySelectorAll(".scope-button").forEach((button) => button.classList.remove("active"));
-    $(scope === "all" ? "allExpensesToggle" : "maintenanceToggle").classList.add("active");
-    populateFilters();
-    applyFilters();
-    renderPage();
-  };
-  $("#allExpensesToggle").addEventListener("click", () => setPopulation("all"));
-  $("#maintenanceToggle").addEventListener("click", () => setPopulation("strict"));
+  $("#allExpensesToggle").addEventListener("click", () => setScope("all"));
+  $("#maintenanceToggle").addEventListener("click", () => setScope(state.maintenanceScope));
 
   const criteriaDialog = $("#criteriaDialog");
-  $("#criteriaButton").addEventListener("click", () => criteriaDialog.showModal());
-  $("#closeCriteria").addEventListener("click", () => criteriaDialog.close());
+  $("#criteriaButton").addEventListener("click", () => openCriteriaDialog(criteriaDialog));
+  $("#closeCriteria").addEventListener("click", () => closeCriteriaDialog(criteriaDialog));
+  criteriaDialog.addEventListener("click", (event) => {
+    if (event.target === criteriaDialog) closeCriteriaDialog(criteriaDialog);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && criteriaDialog.open) closeCriteriaDialog(criteriaDialog);
+  });
 
   let selectedFile = null;
   const fileInput = $("#odsFile");
@@ -690,7 +739,7 @@ function bindEvents() {
     selectedFile = event.target.files[0] || null;
     processButton.disabled = !selectedFile;
     if (!selectedFile) {
-      status.textContent = "Usando el snapshot preparado del Site.";
+      status.textContent = "Usando los datos preparados del tablero.";
       status.className = "file-status";
       return;
     }
@@ -710,13 +759,13 @@ function bindEvents() {
       state.rows = payload.rows;
       state.meta = payload.meta;
       for (const key of Object.keys(state.filters)) state.filters[key] = key === "scope" ? "strict" : "";
-      $("#scopeFilter").value = "strict";
+      state.maintenanceScope = "strict";
       $("#searchBox").value = "";
-      $("#sourceLine").textContent = `${state.meta.source} · hoja Data · ${number.format(state.meta.rows)} líneas preparadas · posting ${state.meta.posting_min} a ${state.meta.posting_max}`;
+      $("#sourceLine").textContent = `${state.meta.source} · hoja Data · ${number.format(state.meta.rows)} líneas preparadas · contabilización ${state.meta.posting_min} a ${state.meta.posting_max}`;
       populateFilters();
       applyFilters();
       renderPage();
-      status.textContent = `Archivo cargado: ${file.name} (${number.format(state.rows.length)} líneas de mantenimiento).`;
+      status.textContent = `Archivo cargado: ${file.name} (${number.format(state.rows.length)} líneas totales). Vista inicial: mantenimiento financiero estricto.`;
       status.className = "file-status success-text";
     } catch (error) {
       console.error(error);
@@ -735,7 +784,7 @@ async function init() {
     const payload = await loadCompressedData();
     state.rows = payload.rows;
     state.meta = payload.meta;
-    $("#sourceLine").textContent = `${state.meta.source} · hoja ${state.meta.source_sheet} · ${number.format(state.meta.rows)} líneas preparadas · posting ${state.meta.posting_min} a ${state.meta.posting_max}`;
+    $("#sourceLine").textContent = `${state.meta.source} · hoja ${state.meta.source_sheet} · ${number.format(state.meta.rows)} líneas preparadas · contabilización ${state.meta.posting_min} a ${state.meta.posting_max}`;
     populateFilters();
     applyFilters();
     renderPage();
@@ -743,8 +792,8 @@ async function init() {
     $("#loading").classList.add("hidden");
   } catch (error) {
     console.error(error);
-    $("#loading").textContent = "Seleccione un archivo XLSX para iniciar el dashboard.";
-    $("#fileStatus").textContent = "No se pudo cargar el snapshot. Puedes cargar el archivo ODS SAP desde aquí.";
+    $("#loading").textContent = "Seleccione un archivo XLSX para iniciar el tablero.";
+    $("#fileStatus").textContent = "No se pudieron cargar los datos preparados. Puede cargar el archivo ODS SAP desde aquí.";
     $("#fileStatus").className = "file-status error-text";
   }
 }
@@ -782,7 +831,7 @@ async function loadUploadedFile(file) {
   const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets.Data, { defval: "", raw: true });
   if (!rawRows.length) throw new Error("La hoja Data no contiene registros.");
   const rows = normalizeUploadedRows(rawRows);
-  if (!rows.length) throw new Error("No se encontraron registros de mantenimiento en la hoja Data.");
+  if (!rows.length) throw new Error("No se encontraron registros válidos en la hoja Data.");
   return { rows, meta: buildUploadedMeta(rows, file.name) };
 }
 
@@ -795,7 +844,7 @@ function base64ToArrayBuffer(base64) {
 
 init().catch((error) => {
   console.error(error);
-  $("#loading").textContent = "No se pudo cargar el dashboard.";
+  $("#loading").textContent = "No se pudo cargar el tablero.";
 });
 
 

@@ -6,9 +6,9 @@
     <title>Costos de Mantenimiento ODS SAP 2026</title>
     <meta
       name="description"
-      content="Dashboard gerencial privado de costos de mantenimiento basado en ODS SAP 2026."
+      content="Tablero gerencial privado de costos de mantenimiento basado en ODS SAP 2026."
     />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260921-controls" />
   </head>
   <body>
     <div class="app-shell">
@@ -18,13 +18,14 @@
             <p class="eyebrow">ODS SAP 2026</p>
             <h1>Costos de Mantenimiento</h1>
           </div>
-          <span class="status-dot" title="Snapshot privado"></span>
+          <span class="status-dot" title="Fuente de datos preparada"></span>
         </div>
 
         <label class="field">
           <span>Alcance</span>
           <select id="scopeFilter">
-            <option value="strict">Mantenimiento financiero estricto</option>
+            <option value="all">Todos los gastos cargados</option>
+            <option value="strict" selected>Mantenimiento financiero estricto</option>
             <option value="expanded">Mantenimiento ampliado</option>
           </select>
         </label>
@@ -37,14 +38,14 @@
           <button id="processOdsFile" class="upload-button" type="button" disabled>
             Cargar / procesar archivo
           </button>
-          <p id="fileStatus" class="file-status">Usando el snapshot preparado del Site.</p>
+          <p id="fileStatus" class="file-status">Usando los datos preparados del tablero.</p>
         </div>
 
         <div class="filter-grid">
           <label class="field"><span>Año</span><select id="yearFilter"></select></label>
           <label class="field"><span>Mes</span><select id="monthFilter"></select></label>
           <label class="field"><span>Centro / estación</span><select id="stationFilter"></select></label>
-          <label class="field"><span>Profit center</span><select id="profitFilter"></select></label>
+          <label class="field"><span>Centro de beneficio</span><select id="profitFilter"></select></label>
           <label class="field"><span>Área funcional</span><select id="areaFilter"></select></label>
           <label class="field"><span>Cuenta</span><select id="accountFilter"></select></label>
           <label class="field"><span>Tipo OT</span><select id="woTypeFilter"></select></label>
@@ -79,9 +80,14 @@
             <p id="sourceLine" class="source-line">Cargando fuente...</p>
           </div>
           <div class="topbar-actions">
-            <div class="scope-toggle" role="group" aria-label="Población del tablero">
-              <button id="allExpensesToggle" type="button" class="scope-button">Todos los gastos cargados</button>
-              <button id="maintenanceToggle" type="button" class="scope-button active">Solo costos de mantenimiento</button>
+            <div class="scope-control">
+              <div class="scope-toggle" role="group" aria-label="Universo del tablero">
+                <button id="allExpensesToggle" type="button" class="scope-button" aria-pressed="false">Todos los gastos cargados</button>
+                <button id="maintenanceToggle" type="button" class="scope-button active" aria-pressed="true">Solo costos de mantenimiento</button>
+              </div>
+              <p id="populationStatus" class="population-status" role="status" aria-live="polite">
+                Universo: costos de mantenimiento — criterio financiero estricto.
+              </p>
             </div>
             <button id="criteriaButton" type="button">Criterios de clasificación</button>
             <button id="downloadCsv" type="button">Exportar vista CSV</button>
@@ -89,18 +95,18 @@
         </header>
 
         <nav class="tabs" aria-label="Páginas del tablero">
-          <button class="tab active" data-page="executive">Resumen Ejecutivo</button>
-          <button class="tab" data-page="station">Centro de Costo / Estación</button>
-          <button class="tab" data-page="account">Cuenta y Área</button>
-          <button class="tab" data-page="orders">Órdenes de Trabajo</button>
-          <button class="tab" data-page="technical">Ubicaciones y Sistemas</button>
-          <button class="tab" data-page="vendors">Proveedores y Compras</button>
-          <button class="tab" data-page="quality">Calidad de Datos</button>
+          <button class="tab active" data-page="executive">Resumen ejecutivo</button>
+          <button class="tab" data-page="station">Centro de costo / estación</button>
+          <button class="tab" data-page="account">Cuenta y área</button>
+          <button class="tab" data-page="orders">Órdenes de trabajo</button>
+          <button class="tab" data-page="technical">Ubicaciones y sistemas</button>
+          <button class="tab" data-page="vendors">Proveedores y compras</button>
+          <button class="tab" data-page="quality">Calidad de datos</button>
         </nav>
 
         <section class="alert-strip">
           <span>Wo_Number = 0 se trata como sin OT válida.</span>
-          <span>Septiembre se marca como periodo parcial.</span>
+          <span>Septiembre se marca como período parcial.</span>
           <span>Proveedor, sistema, ubicación y equipo dependen de cobertura.</span>
         </section>
 
@@ -117,8 +123,8 @@
     </div>
 
     <div id="loading" class="loading">Preparando dashboard...</div>
-    <dialog id="criteriaDialog">
-      <div class="dialog-heading"><div><p class="eyebrow">Método de clasificación</p><h2>Criterios de clasificación de costos</h2></div><button id="closeCriteria" type="button">Cerrar</button></div>
+    <dialog id="criteriaDialog" aria-labelledby="criteriaDialogTitle">
+      <div class="dialog-heading"><div><p class="eyebrow">Método de clasificación</p><h2 id="criteriaDialogTitle">Criterios de clasificación de costos</h2></div><button id="closeCriteria" type="button">Cerrar</button></div>
       <div class="criteria-copy">
         <p><strong>Criterio financiero estricto:</strong> se incluyen las filas con <code>Level 3 (Summ FS) = Maintenance costs</code>.</p>
         <p><strong>Criterio ampliado:</strong> también se consideran las áreas funcionales <code>Repairs &amp; Maintenance</code>, <code>Preventative Maintenance</code>, <code>General Maintenance</code> y <code>Downhole Well Maintenance</code>.</p>
@@ -129,7 +135,7 @@
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-    <script src="./data.js"></script>
-    <script src="./app.js"></script>
+    <script src="./data.js?v=20260921-controls"></script>
+    <script src="./app.js?v=20260921-controls"></script>
   </body>
 </html>
