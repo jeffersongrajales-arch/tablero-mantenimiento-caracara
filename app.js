@@ -663,10 +663,28 @@ function bindEvents() {
 
   $("#downloadCsv").addEventListener("click", downloadCsv);
 
-  $("#odsFile").addEventListener("change", async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    const status = $("#fileStatus");
+  let selectedFile = null;
+  const fileInput = $("#odsFile");
+  const processButton = $("#processOdsFile");
+  const status = $("#fileStatus");
+
+  fileInput.addEventListener("change", (event) => {
+    selectedFile = event.target.files[0] || null;
+    processButton.disabled = !selectedFile;
+    if (!selectedFile) {
+      status.textContent = "Usando el snapshot preparado del Site.";
+      status.className = "file-status";
+      return;
+    }
+    status.textContent = `Archivo seleccionado: ${selectedFile.name}. Presione “Cargar / procesar archivo” para confirmar.`;
+    status.className = "file-status selected-text";
+  });
+
+  processButton.addEventListener("click", async () => {
+    if (!selectedFile) return;
+    const file = selectedFile;
+    processButton.disabled = true;
+    fileInput.disabled = true;
     status.textContent = "Leyendo hoja Data...";
     status.className = "file-status loading-text";
     try {
@@ -686,6 +704,9 @@ function bindEvents() {
       console.error(error);
       status.textContent = error.message || "No se pudo cargar el archivo.";
       status.className = "file-status error-text";
+      processButton.disabled = false;
+    } finally {
+      fileInput.disabled = false;
     }
   });
 }

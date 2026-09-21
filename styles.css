@@ -133,6 +133,19 @@ input:focus {
   background: #fff;
 }
 
+.upload-button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #087f8c;
+  border-radius: 6px;
+  background: #087f8c;
+  color: #fff;
+  font-weight: 700;
+}
+
+.upload-button:hover:not(:disabled) { background: #066873; }
+
 .file-status {
   margin: 6px 0 0;
   color: var(--muted);
@@ -140,6 +153,7 @@ input:focus {
   line-height: 1.35;
 }
 
+.selected-text { color: var(--teal); }
 .success-text { color: var(--green); }
 .error-text { color: var(--red); }
 .loading-text { color: var(--amber); }
