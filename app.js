@@ -43,7 +43,14 @@ const number = new Intl.NumberFormat("es-CO");
 const percent = new Intl.NumberFormat("es-CO", { style: "percent", maximumFractionDigits: 1 });
 
 function $(selector) {
-  return document.querySelector(selector);
+  if (typeof selector !== "string") return null;
+  const normalized =
+    selector.startsWith("#") ||
+    selector.startsWith(".") ||
+    selector.startsWith("[")
+      ? selector
+      : `#${selector}`;
+  return document.querySelector(normalized);
 }
 
 function el(tag, className, html) {
